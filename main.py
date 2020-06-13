@@ -16,7 +16,8 @@ def sync_fps(time_start):
     if (timeDiff < 1.0 / (fps)):
         time.sleep(1.0 / (fps) - timeDiff)
 
-if __name__ == "__main__":
+
+def main():
     while (cap.isOpened()):
         time_start = time.time()
         ret, frame = cap.read()
@@ -31,3 +32,7 @@ if __name__ == "__main__":
         sync_fps(time_start=time_start)
     cap.release()
     cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()
