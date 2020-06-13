@@ -54,27 +54,29 @@ def gpuTest():
     print(matrix_dot_vector)
 
 def main():
-    # while (cap.isOpened()):
-    #     time_start = time.time()
-    #     ret, frame = cap.read()
-    #     #######################################
-    #     #Do things here
-    #     #x = LaneDetection(frame)
-    #     #name, final_frame = x.lane_detection()
-    #     signRecognizer = TrafficSignRecognition(frame)
-    #     name = "Traffic Sign Recognition"
-    #     final_frame = signRecognizer.frame_preprocessing()
-    #     #######################################
-    #     cv2.imshow(name, final_frame)
-    #     key = cv2.waitKey(1)
-    #     if key == ord('q'):
-    #         break
-    #     if key == ord('w'):
-    #         cv2.waitKey(-1)
-    #     sync_fps(time_start=time_start)
-    # cap.release()
-    # cv2.destroyAllWindows()
+    while (cap.isOpened()):
+        time_start = time.time()
+        ret, frame = cap.read()
+        #######################################
+        #Do things here
+        #x = LaneDetection(frame)
+        #name, final_frame = x.lane_detection()
+        signRecognizer = TrafficSignRecognition(frame)
+        name = "Traffic Sign Recognition"
+        final_frame = signRecognizer.frame_preprocessing()
+        classification = signRecognizer.templateSumSquare()
+        #######################################
+        cv2.imshow(name, final_frame)
+        key = cv2.waitKey(1)
+        if key == ord('q'):
+            break
+        if key == ord('w'):
+            cv2.waitKey(-1)
+        sync_fps(time_start=time_start)
+    cap.release()
+    cv2.destroyAllWindows()
     gpuTest()
+
 
 
 if __name__ == "__main__":
