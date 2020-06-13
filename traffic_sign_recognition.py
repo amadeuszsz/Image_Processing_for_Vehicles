@@ -17,25 +17,35 @@ class TrafficSignRecognition():
 
     def frame_preprocessing(self):
         # load and convert source image
-        src = np.array(self.frame)
-        return cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
+        frame = np.array(self.frame)
 
-        # get size of source image (note height is stored at index 0)
-        h = src.shape[0]
-        w = src.shape[1]
+        # get size of frame image 
+        h = frame.shape[0]
+        w = frame.shape[1]
+        mask = np.array([[165, 120, 70],[195, 255, 255]])
+
 
         # buffors
-        src_buf = cl.image_from_array(GPUSetup.context, src, 4)
+        mem_flags = cl.mem_flags
+        frame_buf = cl.image_from_array(GPUSetup.context, frame, 4)
         fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
         dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
+        mask_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_ONLY | mem_flags.COPY_HOST_PTR, hostbuf=mask)
 
-        GPUSetup.program.rgb2hsl(GPUSetup.queue, (w, h), None, src_buf, dest_buf)
-        hsl = np.empty_like(src)
-        cl.enqueue_copy(GPUSetup.queue, hsl, dest_buf, origin=(0, 0), region=(w, h))
-        return hsl
+        #RGB to HSL
+        GPUSetup.program.rgb2hsl(GPUSetup.queue, (w, h), None, frame_buf, dest_buf)
+        self.hsl = np.empty_like(frame)
+        cl.enqueue_copy(GPUSetup.queue, self.hsl, dest_buf, origin=(0, 0), region=(w, h))
 
+        # Apply mask
+        print(mask)
+        GPUSetup.program.hslMask(GPUSetup.queue, (w, h), None, frame_buf, mask_buf, dest_buf)
+        self.after_mask = np.empty_like(frame)
+        cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
+
+        return self.hsl
         # self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
-        #define range of blue color in HSV
+        # #define range of blue color in HSV
         # lower_blue = np.array([165, 120, 70])
         # upper_blue = np.array([195, 255, 255])
         # # Threshold the HSV image to get only blue colors
@@ -43,67 +53,67 @@ class TrafficSignRecognition():
         # # Bitwise-AND mask and original image
         # self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
 
-    def connected_components(self, offset=5, min_object_size=100):
-        self.frame_preprocessing()
-        label = 1
-        #Coordinates (indices [x, y]) of pixels with R channel (BGR code) greater than 40
-        coords = np.argwhere(self.after_mask[:, :, 2] > 40)
-        labels = np.zeros(shape=(self.height, self.width), dtype=int)
+    # def connected_components(self, offset=5, min_object_size=100):
+    #     self.frame_preprocessing()
+    #     label = 1
+    #     #Coordinates (indices [x, y]) of pixels with R channel (BGR code) greater than 40
+    #     coords = np.argwhere(self.after_mask[:, :, 2] > 40)
+    #     labels = np.zeros(shape=(self.height, self.width), dtype=int)
 
-        #Assigning initial labels for pixels with specific coordinates
-        for coord in coords:
-            labels[coord[0], coord[1]] = label
-            label+=1
+    #     #Assigning initial labels for pixels with specific coordinates
+    #     for coord in coords:
+    #         labels[coord[0], coord[1]] = label
+    #         label+=1
 
-        #Connecting pixels (8 connectivity)
-        while True:
-            try:
-                break_flag = 1
-                for coord in coords:
-                    #(3+offset)x(3+offset) matrix with center of coord variable
-                    neighbouring_pixels = labels[coord[0] - 1 - offset:coord[0] + 2 + offset, coord[1] - 1 - offset:coord[1] + 2 + offset]
-                    #Minimum value of label excluding 0
-                    min_label = np.min(neighbouring_pixels[np.nonzero(neighbouring_pixels)])
-                    #If any connection then keep loop
-                    if (labels[coord[0], coord[1]] > min_label):
-                        labels[coord[0], coord[1]] = min_label
-                        break_flag = 0
-                if break_flag:
-                    break
-            except Exception as ex:
-                print(ex)
+    #     #Connecting pixels (8 connectivity)
+    #     while True:
+    #         try:
+    #             break_flag = 1
+    #             for coord in coords:
+    #                 #(3+offset)x(3+offset) matrix with center of coord variable
+    #                 neighbouring_pixels = labels[coord[0] - 1 - offset:coord[0] + 2 + offset, coord[1] - 1 - offset:coord[1] + 2 + offset]
+    #                 #Minimum value of label excluding 0
+    #                 min_label = np.min(neighbouring_pixels[np.nonzero(neighbouring_pixels)])
+    #                 #If any connection then keep loop
+    #                 if (labels[coord[0], coord[1]] > min_label):
+    #                     labels[coord[0], coord[1]] = min_label
+    #                     break_flag = 0
+    #             if break_flag:
+    #                 break
+    #         except Exception as ex:
+    #             print(ex)
 
-        #List of objects (unique label on frame)
-        objects = np.unique(labels)
-        objects = np.delete(objects, np.where(objects == 0))
+    #     #List of objects (unique label on frame)
+    #     objects = np.unique(labels)
+    #     objects = np.delete(objects, np.where(objects == 0))
 
-        #Rejecting small objects
-        for object in objects:
-            if np.count_nonzero(labels == object) < min_object_size:
-                labels[labels == object] = 0
-                objects = np.delete(objects, np.where(objects == object))
+    #     #Rejecting small objects
+    #     for object in objects:
+    #         if np.count_nonzero(labels == object) < min_object_size:
+    #             labels[labels == object] = 0
+    #             objects = np.delete(objects, np.where(objects == object))
 
-        #Getting coords of objects
-        for object in objects:
-            most_left = self.width
-            most_right = 0
-            most_top = self.height
-            most_bottom = 0
-            for coord in coords:
-                if labels[coord[0], coord[1]] == object:
-                    if(coord[1] < most_left): most_left = coord[1]
-                    if(coord[1] > most_right): most_right = coord[1]
-                    if(coord[0] < most_top): most_top = coord[0]
-                    if(coord[0] > most_bottom): most_bottom = coord[0]
-            self.objects_coords.append([(most_left, most_top), (most_right, most_bottom)])
+    #     #Getting coords of objects
+    #     for object in objects:
+    #         most_left = self.width
+    #         most_right = 0
+    #         most_top = self.height
+    #         most_bottom = 0
+    #         for coord in coords:
+    #             if labels[coord[0], coord[1]] == object:
+    #                 if(coord[1] < most_left): most_left = coord[1]
+    #                 if(coord[1] > most_right): most_right = coord[1]
+    #                 if(coord[0] < most_top): most_top = coord[0]
+    #                 if(coord[0] > most_bottom): most_bottom = coord[0]
+    #         self.objects_coords.append([(most_left, most_top), (most_right, most_bottom)])
 
-        cv2.rectangle(self.frame, self.objects_coords[0][0], self.objects_coords[0][1], (0, 255, 0), 2)
+    #     cv2.rectangle(self.frame, self.objects_coords[0][0], self.objects_coords[0][1], (0, 255, 0), 2)
 
-        # for coord in coords:
-        #     if labels[coord[0], coord[1]] > 0:
-        #         self.after_mask[coord[0], coord[1]] = [255, 0, 0]
+    #     # for coord in coords:
+    #     #     if labels[coord[0], coord[1]] > 0:
+    #     #         self.after_mask[coord[0], coord[1]] = [255, 0, 0]
 
-        return self.frame
+    #     return self.frame
 
     def templateSumSquare(self):
         templates = Templates().templates
@@ -150,7 +160,3 @@ class TrafficSignRecognition():
             sign.type = np.argmin(single_sign_results)
             print(sign.type)
         return results
-
-
-    def connected_components(self):
-        pass
