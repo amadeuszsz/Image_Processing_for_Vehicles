@@ -65,6 +65,7 @@ def main():
         #name, final_frame = x.lane_detection()
         signRecognizer = TrafficSignRecognition(frame)
         name = "Traffic Sign Recognition"
+        final_frame = TrafficSignRecognition(frame).connected_components()
         final_frame = signRecognizer.frame_preprocessing()
         classification = signRecognizer.templateSumSquare()
         #######################################
@@ -78,7 +79,6 @@ def main():
     cap.release()
     cv2.destroyAllWindows()
     #gpuTest()
-
 
 
 if __name__ == "__main__":
