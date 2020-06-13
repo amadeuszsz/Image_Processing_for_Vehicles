@@ -5,12 +5,6 @@ import pyopencl.cltypes
 
 
 class GPUSetup():
-    platform = None
-    device = None
-    context = None
-    program = None
-    queue = None
-
     def __init__(self):
         self.platform = cl.get_platforms()[0]
         self.device = self.platform.get_devices()[0]

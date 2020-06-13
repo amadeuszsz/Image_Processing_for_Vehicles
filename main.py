@@ -33,7 +33,7 @@ def gpuTest():
     matrix[0, 2] = (3, 6, 9, 12)
     matrix[0, 3] = (5, 10, 15, 25)
     vector[0, 0] = (1, 2, 4, 8)
-     
+
     ## Step #8. Allocate device memory and move input data from the host to the device memory.
     mem_flags = cl.mem_flags
     matrix_buf = cl.Buffer(gpuSetup.context, mem_flags.READ_ONLY | mem_flags.COPY_HOST_PTR, hostbuf=matrix)
