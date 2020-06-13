@@ -68,12 +68,11 @@ def main():
         final_frame = x.frame_preprocessing()
         #######################################
         cv2.imshow(name, final_frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        key = cv2.waitKey(1)
+        if key == ord('q'):
             break
-        if cv2.waitKey(1) & 0xFF == ord('w'):
-            while True:
-                if cv2.waitKey(1) & 0xFF == ord('w'):
-                    break
+        if key == ord('w'):
+            cv2.waitKey(-1)
         sync_fps(time_start=time_start)
     cap.release()
     cv2.destroyAllWindows()
