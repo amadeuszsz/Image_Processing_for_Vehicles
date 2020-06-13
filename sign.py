@@ -1,8 +1,10 @@
 
 
 class Sign():
-    width = None
-    height = None
-    x = None
-    y = None
-    type = None # From template matching
+    def __init__(self,x,y,width,height):
+        self.width = width
+        self.height = height
+        self.x = x
+        self.y = y
+        self.type = None # From template matching
+
