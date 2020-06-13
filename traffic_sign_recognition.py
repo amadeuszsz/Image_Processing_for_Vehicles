@@ -17,31 +17,31 @@ class TrafficSignRecognition():
 
     def frame_preprocessing(self):
         # load and convert source image
-        src = np.array(self.frame)
-        return cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
+        # src = np.array(self.frame)
+        # return cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
+        #
+        # # get size of source image (note height is stored at index 0)
+        # h = src.shape[0]
+        # w = src.shape[1]
+        #
+        # # buffors
+        # src_buf = cl.image_from_array(GPUSetup.context, src, 4)
+        # fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
+        # dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
+        #
+        # GPUSetup.program.rgb2hsl(GPUSetup.queue, (w, h), None, src_buf, dest_buf)
+        # hsl = np.empty_like(src)
+        # cl.enqueue_copy(GPUSetup.queue, hsl, dest_buf, origin=(0, 0), region=(w, h))
+        # return hsl
 
-        # get size of source image (note height is stored at index 0)
-        h = src.shape[0]
-        w = src.shape[1]
-
-        # buffors
-        src_buf = cl.image_from_array(GPUSetup.context, src, 4)
-        fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
-        dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
-
-        GPUSetup.program.rgb2hsl(GPUSetup.queue, (w, h), None, src_buf, dest_buf)
-        hsl = np.empty_like(src)
-        cl.enqueue_copy(GPUSetup.queue, hsl, dest_buf, origin=(0, 0), region=(w, h))
-        return hsl
-
-        # self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
-        #define range of blue color in HSV
-        # lower_blue = np.array([165, 120, 70])
-        # upper_blue = np.array([195, 255, 255])
-        # # Threshold the HSV image to get only blue colors
-        # mask = cv2.inRange(hsl, lower_blue, upper_blue)
-        # # Bitwise-AND mask and original image
-        # self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
+        self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
+        # define range of blue color in HSV
+        lower_blue = np.array([165, 120, 70])
+        upper_blue = np.array([195, 255, 255])
+        # Threshold the HSV image to get only blue colors
+        mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
+        # Bitwise-AND mask and original image
+        self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
 
     def connected_components(self, offset=5, min_object_size=100):
         self.frame_preprocessing()
@@ -96,8 +96,9 @@ class TrafficSignRecognition():
                     if(coord[0] < most_top): most_top = coord[0]
                     if(coord[0] > most_bottom): most_bottom = coord[0]
             self.objects_coords.append([(most_left, most_top), (most_right, most_bottom)])
-
-        cv2.rectangle(self.frame, self.objects_coords[0][0], self.objects_coords[0][1], (0, 255, 0), 2)
+            sign = Sign(x=most_left, y=most_top, width=most_right - most_left, height=most_bottom - most_top)
+            self.signs.append(sign)
+            cv2.rectangle(self.frame, self.objects_coords[0][0], self.objects_coords[0][1], (0, 255, 0), 2)
 
         # for coord in coords:
         #     if labels[coord[0], coord[1]] > 0:
@@ -150,7 +151,3 @@ class TrafficSignRecognition():
             sign.type = np.argmin(single_sign_results)
             print(sign.type)
         return results
-
-
-    def connected_components(self):
-        pass
