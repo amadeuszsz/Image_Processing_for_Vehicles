@@ -12,19 +12,37 @@ class TrafficSignRecognition():
     signs = [] # of type Sign
 
     def __init__(self, frame):
-        self.frame = frame
+        self.frame = cv2.cvtColor(frame, cv2.COLOR_RGB2RGBA)
 
     def frame_preprocessing(self):
-        self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
-        #define range of blue color in HSV
-        lower_blue = np.array([165, 120, 70])
-        upper_blue = np.array([195, 255, 255])
-        # Threshold the HSV image to get only blue colors
-        mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
-        # Bitwise-AND mask and original image
-        self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
+        # load and convert source image
+        src = np.array(self.frame)
+        return cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
 
-        return self.after_mask
+        # get size of source image (note height is stored at index 0)
+        h = src.shape[0]
+        w = src.shape[1]
+
+        # buffors
+        src_buf = cl.image_from_array(GPUSetup.context, src, 4)
+        fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
+        dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
+
+        GPUSetup.program.rgb2hsl(GPUSetup.queue, (w, h), None, src_buf, dest_buf)
+        hsl = np.empty_like(src)
+        cl.enqueue_copy(GPUSetup.queue, hsl, dest_buf, origin=(0, 0), region=(w, h))
+        return hsl
+
+        # self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
+        #define range of blue color in HSV
+        # lower_blue = np.array([165, 120, 70])
+        # upper_blue = np.array([195, 255, 255])
+        # # Threshold the HSV image to get only blue colors
+        # mask = cv2.inRange(hsl, lower_blue, upper_blue)
+        # # Bitwise-AND mask and original image
+        # self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
+
+        # return self.after_mask
 
     def templateSumSquare(self):
         templates = Templates().templates
@@ -58,16 +76,18 @@ class TrafficSignRecognition():
                 frame_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_ONLY | mem_flags.COPY_HOST_PTR, hostbuf=frame_arr)
 
                 # build destination OpenCL Image
-                mse_buf = cl.Buffer(GPUSetup.context, mem_flags.WRITE_ONLY, template_arr.nbytes)
+                ssd_buf = cl.Buffer(GPUSetup.context, mem_flags.WRITE_ONLY, template_arr.nbytes)
 
                 # execute OpenCL function
-                GPUSetup.program.square_sum(GPUSetup.queue, template_arr.shape, None, template_buf, frame_buf, mse_buf)
+                GPUSetup.program.square_sum(GPUSetup.queue, template_arr.shape, None, template_buf, frame_buf, ssd_buf)
 
                 # copy result back to host
-                mse = np.empty_like(template_arr)
-                cl.enqueue_copy(GPUSetup.queue, mse, mse_buf)
-                single_sign_results.append(np.sum(mse))
-            results.append(np.argmax(single_sign_results))
+                ssd = np.empty_like(template_arr)
+                cl.enqueue_copy(GPUSetup.queue, ssd, ssd_buf)
+                single_sign_results.append(np.sum(ssd))
+            results.append(np.argmin(single_sign_results))
+            sign.type = np.argmin(single_sign_results)
+            print(sign.type)
         return results
 
 
