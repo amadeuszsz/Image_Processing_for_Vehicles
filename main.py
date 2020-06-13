@@ -9,9 +9,11 @@ from traffic_sign_recognition import TrafficSignRecognition
 from GPUSetup import GPUSetup
 
 #Video variables
-cap = cv2.VideoCapture('videos/video1.mp4')
+cap = cv2.VideoCapture('videos/video5.mp4')
 fps = cap.get(cv2.CAP_PROP_FPS)
 
+#OpenCL variables
+gpuSetup = GPUSetup()
 
 def sync_fps(time_start):
     '''
@@ -35,17 +37,17 @@ def gpuTest():
 
     ## Step #8. Allocate device memory and move input data from the host to the device memory.
     mem_flags = cl.mem_flags
-    matrix_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_ONLY | mem_flags.COPY_HOST_PTR, hostbuf=matrix)
-    vector_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_ONLY | mem_flags.COPY_HOST_PTR, hostbuf=vector)
+    matrix_buf = cl.Buffer(gpuSetup.context, mem_flags.READ_ONLY | mem_flags.COPY_HOST_PTR, hostbuf=matrix)
+    vector_buf = cl.Buffer(gpuSetup.context, mem_flags.READ_ONLY | mem_flags.COPY_HOST_PTR, hostbuf=vector)
     matrix_dot_vector = np.zeros(4, np.float32)
-    destination_buf = cl.Buffer(GPUSetup.context, mem_flags.WRITE_ONLY, matrix_dot_vector.nbytes)
+    destination_buf = cl.Buffer(gpuSetup.context, mem_flags.WRITE_ONLY, matrix_dot_vector.nbytes)
      
     ## Step #9. Associate the arguments to the kernel with kernel object.
     ## Step #10. Deploy the kernel for device execution.
-    GPUSetup.program.matrix_dot_vector(GPUSetup.queue, matrix_dot_vector.shape, None, matrix_buf, vector_buf, destination_buf)
+    gpuSetup.program.matrix_dot_vector(gpuSetup.queue, matrix_dot_vector.shape, None, matrix_buf, vector_buf, destination_buf)
      
     ## Step #11. Move the kernel’s output data to host memory.
-    cl.enqueue_copy(GPUSetup.queue, matrix_dot_vector, destination_buf)
+    cl.enqueue_copy(gpuSetup.queue, matrix_dot_vector, destination_buf)
      
     ## Step #12. Release context, program, kernels and memory.
     ## PyOpenCL performs this step for you, and therefore,
@@ -75,7 +77,7 @@ def main():
         sync_fps(time_start=time_start)
     cap.release()
     cv2.destroyAllWindows()
-    gpuTest()
+    #gpuTest()
 
 
 

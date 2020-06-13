@@ -16,8 +16,8 @@ class TrafficSignRecognition():
 
     def frame_preprocessing(self):
         self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
-        # define range of blue color in HSV
-        lower_blue = np.array([165, 0, 0])
+        #define range of blue color in HSV
+        lower_blue = np.array([165, 120, 70])
         upper_blue = np.array([195, 255, 255])
         # Threshold the HSV image to get only blue colors
         mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
@@ -69,3 +69,7 @@ class TrafficSignRecognition():
                 single_sign_results.append(np.sum(mse))
             results.append(np.argmax(single_sign_results))
         return results
+
+
+    def connected_components(self):
+        pass
