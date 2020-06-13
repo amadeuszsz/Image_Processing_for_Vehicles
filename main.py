@@ -63,9 +63,9 @@ def main():
         #Do things here
         #x = LaneDetection(frame)
         #name, final_frame = x.lane_detection()
-        x = TrafficSignRecognition(frame)
+        signRecognizer = TrafficSignRecognition(frame)
         name = "Traffic Sign Recognition"
-        final_frame = x.frame_preprocessing()
+        final_frame = signRecognizer.frame_preprocessing()
         #######################################
         cv2.imshow(name, final_frame)
         key = cv2.waitKey(1)
