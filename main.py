@@ -5,6 +5,7 @@ import pyopencl as cl
 import pyopencl.cltypes
 
 from lane_detection import LaneDetection
+from traffic_sign_recognition import TrafficSignRecognition
 from GPUSetup import GPUSetup
 
 #Video variables
@@ -55,21 +56,28 @@ def gpuTest():
     print(matrix_dot_vector)
 
 def main():
-    # while (cap.isOpened()):
-    #     time_start = time.time()
-    #     ret, frame = cap.read()
-    #     #######################################
-    #     #Do things here
-    #     x = LaneDetection(frame)
-    #     name, final_frame = x.lane_detection()
-    #     #######################################
-    #     cv2.imshow(name, final_frame)
-    #     if cv2.waitKey(1) & 0xFF == ord('q'):
-    #         break
-    #     sync_fps(time_start=time_start)
-    # cap.release()
-    # cv2.destroyAllWindows()
-    gpuTest()
+    while (cap.isOpened()):
+        time_start = time.time()
+        ret, frame = cap.read()
+        #######################################
+        #Do things here
+        #x = LaneDetection(frame)
+        #name, final_frame = x.lane_detection()
+        x = TrafficSignRecognition(frame)
+        name = "Traffic Sign Recognition"
+        final_frame = x.frame_preprocessing()
+        #######################################
+        cv2.imshow(name, final_frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+        if cv2.waitKey(1) & 0xFF == ord('w'):
+            while True:
+                if cv2.waitKey(1) & 0xFF == ord('w'):
+                    break
+        sync_fps(time_start=time_start)
+    cap.release()
+    cv2.destroyAllWindows()
+    #gpuTest()
 
 
 if __name__ == "__main__":
