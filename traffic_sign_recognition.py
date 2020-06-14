@@ -2,10 +2,11 @@ import numpy as np
 import cv2
 import pyopencl as cl
 import pyopencl.cltypes
+import glob
+import os, sys
 
 from sign import Sign
 from GPUSetup import GPUSetup
-from templates import Templates
 
 
 class TrafficSignRecognition():
@@ -14,6 +15,10 @@ class TrafficSignRecognition():
         self.height, self.width, self.channels = frame.shape
         self.objects_coords = []
         self.signs = []
+        self.templates = []
+        for filename in glob.iglob(os.getcwd()+ '/templates/*.png', recursive=True):
+            self.templates.append(cv2.imread(filename))
+
 
     def frame_preprocessing(self):
         #*Load and convert source image
@@ -44,6 +49,7 @@ class TrafficSignRecognition():
         cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
 
         return self.after_mask
+
         # self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
         # # define range of blue color in HSV
         # lower_blue = np.array([165, 120, 70])
@@ -52,6 +58,8 @@ class TrafficSignRecognition():
         # mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
         # # Bitwise-AND mask and original image
         # self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
+        # return self.after_mask
+
 
     def connected_components(self, offset=5, min_object_size=100):
         self.frame_preprocessing()
@@ -115,39 +123,35 @@ class TrafficSignRecognition():
         #     if labels[coord[0], coord[1]] > 0:
         #         self.after_mask[coord[0], coord[1]] = [255, 0, 0]
 
-        return self.frame
-        # for coord in coords:
-        #     if labels[coord[0], coord[1]] > 0:
-        #         self.after_mask[coord[0], coord[1]] = [255, 0, 0]
+        # return self.frame
+        for coord in coords:
+            if labels[coord[0], coord[1]] > 0:
+                self.after_mask[coord[0], coord[1]] = [255, 0, 0,0]
         self.templateSumSquare()
-        print(self.signs[0].type)
         return self.frame
 
+
     def templateSumSquare(self):
-        templates = Templates().templates
+        print("/////////////////\nTemplates num: ", len(self.templates))
+        print("Signs num: ", len(self.signs))
+        # for s in self.signs:
+        #     print(s.x,s.y,s.width,s.height)
         full_frame_img = cv2.cvtColor(self.frame, cv2.COLOR_RGB2GRAY)
         results = []
 
-        # #!Temporary
-        # template_img2 = cv2.imread('templates/0.png')
-        # self.signs.append(Sign(x=10,y=10,height=10,width=10))
-        # #!--------
-
-        for sign in self.signs:
+        for sign in self.signs[::-1]:
             # Load sign + Otsu's thresholding and Gaussian filtering
-            frame_img = full_frame_img[sign.y:sign.y+sign.height, sign.x:sign.y+sign.width]
+            frame_img = full_frame_img[sign.y:sign.y+sign.height, sign.x:sign.x+sign.width]
             blur = cv2.GaussianBlur(frame_img,(5,5),0)
             _, frame_arr = cv2.threshold(blur,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
-            frame_arr = np.array(frame_img).astype(np.float32)
 
             single_sign_results = []
-            for template_img in templates:
+            for template in self.templates:
                 # Load template + Otsu's thresholding and Gaussian filtering for Template
-                template_img = cv2.resize(template_img, (sign.width, sign.height), interpolation = cv2.INTER_AREA)
+                template_img = cv2.resize(template, (sign.width, sign.height), interpolation = cv2.INTER_AREA)    
                 template_img = cv2.cvtColor(template_img, cv2.COLOR_RGB2GRAY)
                 blur = cv2.GaussianBlur(template_img,(5,5),0)
                 _, template_arr = cv2.threshold(blur,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
-                template_arr = np.array(template_img).astype(np.float32)
 
                 mem_flags = cl.mem_flags
                 # build input images buffer
@@ -164,7 +168,17 @@ class TrafficSignRecognition():
                 ssd = np.empty_like(template_arr)
                 cl.enqueue_copy(GPUSetup.queue, ssd, ssd_buf)
                 single_sign_results.append(np.sum(ssd))
+
             results.append(np.argmin(single_sign_results))
-            sign.type = np.argmin(single_sign_results)
-            print(sign.type)
+            if min(single_sign_results) < 8000:
+                sign.type = np.argmin(single_sign_results)
+
+            # *----------------------------DEBUG----------------------------------
+            if sign.type is not None:
+                print("\n++++++++++++++\nType: ", sign.type, "\nX: ",sign.x, "\nT: ", sign.y, "\nWidth: ", sign.width,"\nHeight: ", sign.height)
+                print("Sum squared errors: ", single_sign_results)
+            else:
+                print("\n--------------\nType: ", sign.type, "\nX: ",sign.x, "\nT: ", sign.y, "\nWidth: ", sign.width,"\nHeight: ", sign.height)
+                print("Sum squared errors: ", single_sign_results)
+            # *-------------------------------------------------------------------
         return results
