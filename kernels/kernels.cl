@@ -13,13 +13,39 @@ __kernel void square_sum(__global float *template, __global float *frame, __glob
     output[gid] = pow((template[gid] - frame[gid]),2);
 }
 
-__kernel void init_labels(__global float *after_mask, __global float *labels)
+__kernel void connected_components(__global int *labels,
+__global int *labels_cc)
 {
-    //int label = 1;
-    //int gid = get_global_id(0);
-    //if (after_mask[gid] > 40){
-    //    labels[gid] = label;
-    //}
+    int w = 1920;
+    int h = 1080;
+    int x = get_global_id(1);
+    int y = get_global_id(0);
+    int padding = w;
+    int idx = y*(w*2) + x*2;
+    //labels_cc[idx] = idx;
+    int mask[9];
+
+    //3x3 matrix with center of labels[idx]
+    mask[0] = labels[idx - 2*w - 2];
+    mask[1] = labels[idx - 2*w];
+    mask[2] = labels[idx - 2*w + 2];
+    mask[3] = labels[idx - 2];
+    mask[4] = labels[idx];
+    mask[5] = labels[idx + 2];
+    mask[6] = labels[idx + 2*w - 2];
+    mask[7] = labels[idx + 2*w];
+    mask[8] = labels[idx + 2*w + 2];
+
+    int min_label = labels[idx];
+    for(int i=0; i<9; i++) {
+        if(mask[i] < min_label && mask[i] > 0){
+            min_label = mask[i];
+        }
+    }
+
+    labels[idx] = min_label;
+    labels_cc[idx] = labels[idx];
+
 }
 
 __kernel void rgb2hsv(read_only image2d_t src, write_only image2d_t dest){

@@ -54,7 +54,7 @@ class TrafficSignRecognition():
         # Bitwise-AND mask and original image
         self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
 
-    def connected_components(self, offset=5, min_object_size=100):
+    def connected_components(self, min_object_size=100):
         self.frame_preprocessing()
         label = 1
         # Coordinates (indices [x, y]) of pixels with R channel (BGR code) greater than 40
@@ -66,24 +66,68 @@ class TrafficSignRecognition():
             labels[coord[0], coord[1]] = label
             label += 1
 
+        #labels_arr = np.array(labels).astype(np.float32)
+        labels_cc = np.zeros(shape=labels.shape, dtype=int)
+
+        # #Connecting pixels (8 connectivity)
+        # labels_cc = np.zeros(shape=labels.shape, dtype=int)
+        # labels_test = labels
+        # # Allocate device memory and move input data from the host to the device memory.
+        # mem_flags = cl.mem_flags
+        # # build input images buffer
+        # labels_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_WRITE | mem_flags.COPY_HOST_PTR, hostbuf=labels_test)
+        # # build destination OpenCL Image
+        # labels_cc_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_WRITE, labels_test.nbytes)
+        # # execute OpenCL function
+        # GPUSetup.program.connected_components(GPUSetup.queue, labels_test.shape, None, labels_buf, labels_cc_buf)
+        # cl.enqueue_copy(GPUSetup.queue, labels_cc, labels_cc_buf)
+        #
+        # #print(np.unique(labels))
+        # print(labels_cc)
+
         # Connecting pixels (8 connectivity)
         while True:
             try:
-                break_flag = 1
-                for coord in coords:
-                    # (3+offset)x(3+offset) matrix with center of coord variable
-                    neighbouring_pixels = labels[coord[0] - 1 - offset:coord[0] + 2 + offset,
-                                          coord[1] - 1 - offset:coord[1] + 2 + offset]
-                    # Minimum value of label excluding 0
-                    min_label = np.min(neighbouring_pixels[np.nonzero(neighbouring_pixels)])
-                    # If any connection then keep loop
-                    if (labels[coord[0], coord[1]] > min_label):
-                        labels[coord[0], coord[1]] = min_label
-                        break_flag = 0
-                if break_flag:
+                # Allocate device memory and move input data from the host to the device memory.
+                mem_flags = cl.mem_flags
+                # build input images buffer
+                labels_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_WRITE | mem_flags.COPY_HOST_PTR, hostbuf=labels)
+                # build destination OpenCL Image
+                labels_cc_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_WRITE, labels.nbytes)
+                # execute OpenCL function
+                GPUSetup.program.connected_components(GPUSetup.queue, labels.shape, None, labels_buf, labels_cc_buf)
+                cl.enqueue_copy(GPUSetup.queue, labels_cc, labels_cc_buf)
+
+                # If there is no difference between output and previous output then break
+                if((labels_cc==labels).all()):
                     break
+                # Else assign new labels from kernel to main variable of labels
+                else:
+                    labels=labels_cc
             except Exception as ex:
                 print(ex)
+        #np.savetxt("foo.csv", labels, delimiter=",", fmt="%d")
+        print(np.unique(labels))
+        #print(labels_cc)
+        #print(np.sum(labels_cc))
+        print(np.sum(labels))
+        # while True:
+        #     try:
+        #         break_flag = 1
+        #         for coord in coords:
+        #             # 3x3 matrix with center of coord variable
+        #             neighbouring_pixels = labels[coord[0] - 1:coord[0] + 2,
+        #                                   coord[1] - 1:coord[1] + 2]
+        #             # Minimum value of label excluding 0
+        #             min_label = np.min(neighbouring_pixels[np.nonzero(neighbouring_pixels)])
+        #             # If any connection then keep loop
+        #             if (labels[coord[0], coord[1]] > min_label):
+        #                 labels[coord[0], coord[1]] = min_label
+        #                 break_flag = 0
+        #         if break_flag:
+        #             break
+        #     except Exception as ex:
+        #         print(ex)
 
         # List of objects (unique label on frame)
         objects = np.unique(labels)
@@ -111,6 +155,7 @@ class TrafficSignRecognition():
             sign = Sign(x=most_left, y=most_top, width=most_right - most_left, height=most_bottom - most_top)
             self.signs.append(sign)
             cv2.rectangle(self.frame, self.objects_coords[0][0], self.objects_coords[0][1], (0, 255, 0), 2)
+
 
         # for coord in coords:
         #     if labels[coord[0], coord[1]] > 0:
