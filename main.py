@@ -9,7 +9,7 @@ from traffic_sign_recognition import TrafficSignRecognition
 from GPUSetup import GPUSetup
 
 #Video variables
-cap = cv2.VideoCapture('videos/video5.mp4')
+cap = cv2.VideoCapture('videos/video3.mp4')
 fps = cap.get(cv2.CAP_PROP_FPS)
 
 #OpenCL variables
@@ -63,13 +63,14 @@ def main():
         #Do things here
         #x = LaneDetection(frame)
         #name, final_frame = x.lane_detection()
-        #signRecognizer = TrafficSignRecognition(frame)
+        signRecognizer = TrafficSignRecognition(frame)
         name = "Traffic Sign Recognition"
-        final_frame = TrafficSignRecognition(frame).connected_components()
-        #final_frame = signRecognizer.frame_preprocessing()
+        # final_frame = TrafficSignRecognition(frame).connected_components()
+        final_frame = signRecognizer.frame_preprocessing()
         #classification = signRecognizer.templateSumSquare()
         #######################################
-        cv2.imshow(name, final_frame)
+        resized_img = cv2.resize(final_frame, (960, 540))  
+        cv2.imshow(name, resized_img)
         key = cv2.waitKey(1)
         if key == ord('q'):
             break

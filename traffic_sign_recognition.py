@@ -16,43 +16,44 @@ class TrafficSignRecognition():
         self.signs = []
 
     def frame_preprocessing(self):
-        # # load and convert source image
-        # frame = np.array(self.frame)
-        #
-        # # get size of frame image
-        # h = frame.shape[0]
-        # w = frame.shape[1]
-        # mask = np.array([[165, 120, 70], [195, 255, 255]])
-        #
-        # matrix_dot_vector = np.zeros(6, np.float32)
-        # destination_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.WRITE_ONLY, matrix_dot_vector.nbytes)
-        #
-        # # buffors
-        # frame_buf = cl.image_from_array(GPUSetup.context, frame, 4)
-        # fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
-        # dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
-        # mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=mask)
-        #
-        # #RGB to HSL
-        # GPUSetup.program.rgb2hsv(GPUSetup.queue, (w, h), None, frame_buf, dest_buf)
-        # self.hsl = np.empty_like(frame)
-        # cl.enqueue_copy(GPUSetup.queue, self.hsl, dest_buf, origin=(0, 0), region=(w, h))
-        #
-        # # Apply mask
-        # frame_buf = cl.image_from_array(GPUSetup.context, self.hsl, 4)
-        # GPUSetup.program.hsvMask(GPUSetup.queue, (w, h), None, frame_buf, mask_buf, dest_buf)
-        # self.after_mask = np.empty_like(self.hsl)
-        # cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
-        #
-        # return self.after_mask
-        self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
-        # define range of blue color in HSV
-        lower_blue = np.array([165, 120, 70])
-        upper_blue = np.array([195, 255, 255])
-        # Threshold the HSV image to get only blue colors
-        mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
-        # Bitwise-AND mask and original image
-        self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
+        #*Load and convert source image
+        frame = np.array(self.frame)
+        
+        #*Set properties
+        h = frame.shape[0]
+        w = frame.shape[1]
+        mask = np.zeros((1, 2), cl.cltypes.float4)
+        mask[0, 0] = (165, 120, 70, 0)
+        mask[0, 1] = (195, 255, 255, 0)
+        
+        #*Buffors
+        frame_buf = cl.image_from_array(GPUSetup.context, frame, 4)
+        fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
+        dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
+        mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=mask)
+        
+        #*RGB to HSV
+        GPUSetup.program.rgb2hsv(GPUSetup.queue, (w, h), None, frame_buf, dest_buf)
+        self.hsv = np.empty_like(frame)
+        cl.enqueue_copy(GPUSetup.queue, self.hsv, dest_buf, origin=(0, 0), region=(w, h))
+        
+        #*Apply mask
+        frame_buf = cl.image_from_array(GPUSetup.context, self.hsv, 4)
+        GPUSetup.program.hsvMask(GPUSetup.queue, (w, h), None, frame_buf,mask_buf, dest_buf)
+        self.after_mask = np.empty_like(frame)
+        cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
+        print(self.after_mask)
+
+
+        return self.after_mask
+        # self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
+        # # define range of blue color in HSV
+        # lower_blue = np.array([165, 120, 70])
+        # upper_blue = np.array([195, 255, 255])
+        # # Threshold the HSV image to get only blue colors
+        # mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
+        # # Bitwise-AND mask and original image
+        # self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
 
     def connected_components(self, offset=5, min_object_size=100):
         self.frame_preprocessing()
