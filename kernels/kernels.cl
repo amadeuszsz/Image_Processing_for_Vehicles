@@ -13,6 +13,15 @@ __kernel void square_sum(__global float *template, __global float *frame, __glob
     output[gid] = pow((template[gid] - frame[gid]),2);
 }
 
+__kernel void init_labels(__global float *after_mask, __global float *labels)
+{
+    //int label = 1;
+    //int gid = get_global_id(0);
+    //if (after_mask[gid] > 40){
+    //    labels[gid] = label;
+    //}
+}
+
 __kernel void rgb2hsl(read_only image2d_t src, write_only image2d_t dest){
     const sampler_t sampler =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
     int2 pos = (int2)(get_global_id(0), get_global_id(1));
@@ -20,7 +29,7 @@ __kernel void rgb2hsl(read_only image2d_t src, write_only image2d_t dest){
     // A simple test operation: delete pixel in form of a checkerboard pattern
     float x = (float)pix.x/255;
     float y = (float)pix.y/255;
-    float z = (float)pix.y/255;
+    float z = (float)pix.z/255;
 
     float cmax = fmax(x,y);
     cmax = fmax(cmax, z);

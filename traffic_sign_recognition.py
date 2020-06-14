@@ -60,6 +60,15 @@ class TrafficSignRecognition():
         coords = np.argwhere(self.after_mask[:, :, 2] > 40)
         labels = np.zeros(shape=(self.height, self.width), dtype=int)
 
+        # mem_flags = cl.mem_flags
+        # # build input images buffer
+        # after_mask_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_ONLY | mem_flags.COPY_HOST_PTR,
+        #                        hostbuf=self.after_mask)
+        # # build destination OpenCL Image
+        # labels_buf = cl.Buffer(GPUSetup.context, mem_flags.WRITE_ONLY, labels.nbytes)
+        # # execute OpenCL function
+        # GPUSetup.program.init_labels(GPUSetup.queue, labels.shape, None, after_mask_buf, labels_buf)
+
         # Assigning initial labels for pixels with specific coordinates
         for coord in coords:
             labels[coord[0], coord[1]] = label
@@ -114,7 +123,8 @@ class TrafficSignRecognition():
         # for coord in coords:
         #     if labels[coord[0], coord[1]] > 0:
         #         self.after_mask[coord[0], coord[1]] = [255, 0, 0]
-
+        self.templateSumSquare()
+        print(self.signs[0].type)
         return self.frame
 
     def templateSumSquare(self):
@@ -160,5 +170,4 @@ class TrafficSignRecognition():
                 single_sign_results.append(np.sum(ssd))
             results.append(np.argmin(single_sign_results))
             sign.type = np.argmin(single_sign_results)
-            print(sign.type)
         return results
