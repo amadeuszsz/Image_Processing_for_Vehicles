@@ -66,6 +66,7 @@ __kernel void hsvMask(read_only image2d_t src, __global const float4 *matrix, wr
     int2 pos = (int2)(get_global_id(0), get_global_id(1));
     uint4 pix = read_imageui(src, sampler, pos);
 
+    /*
     if(pix.x<=matrix[0][0] || pix.x >= matrix[1][0]){
         pix.x = 0;
         pix.y = 0;
@@ -78,5 +79,5 @@ __kernel void hsvMask(read_only image2d_t src, __global const float4 *matrix, wr
         pix.z = 0;
     }
 
-
+    */
 }
