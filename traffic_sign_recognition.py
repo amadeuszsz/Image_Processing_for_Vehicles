@@ -2,10 +2,11 @@ import numpy as np
 import cv2
 import pyopencl as cl
 import pyopencl.cltypes
+import glob
+import os, sys
 
 from sign import Sign
 from GPUSetup import GPUSetup
-from templates import Templates
 
 
 class TrafficSignRecognition():
@@ -14,47 +15,72 @@ class TrafficSignRecognition():
         self.height, self.width, self.channels = frame.shape
         self.objects_coords = []
         self.signs = []
+        self.templates = []
+        self.templates_hsv = []
+        self.template_preprocesing()
+
+
+    def template_preprocesing(self):
+        for filename in glob.iglob(os.getcwd()+ '/templates/*.png', recursive=True):
+            template = cv2.cvtColor(cv2.imread(filename), cv2.COLOR_RGB2RGBA)
+            self.templates.append(template)
+
+            h = template.shape[0]
+            w = template.shape[1]       
+            #*Buffors
+            template_buf = cl.image_from_array(GPUSetup.context, template, 4)
+            fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
+            dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
+            
+            #*RGB to HSV
+            GPUSetup.program.rgb2hsv(GPUSetup.queue, (w, h), None, template_buf, dest_buf)
+            template_hsv = np.empty_like(template)
+            cl.enqueue_copy(GPUSetup.queue, template_hsv, dest_buf, origin=(0, 0), region=(w, h))
+            self.templates_hsv.append(template_hsv)
+
 
     def frame_preprocessing(self):
-        # # load and convert source image
-        # frame = np.array(self.frame)
-        #
-        # # get size of frame image
-        # h = frame.shape[0]
-        # w = frame.shape[1]
-        # mask = np.array([[165, 120, 70], [195, 255, 255]])
-        #
-        # matrix_dot_vector = np.zeros(6, np.float32)
-        # destination_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.WRITE_ONLY, matrix_dot_vector.nbytes)
-        #
-        # # buffors
-        # frame_buf = cl.image_from_array(GPUSetup.context, frame, 4)
-        # fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
-        # dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
-        # mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=mask)
-        #
-        # #RGB to HSL
-        # GPUSetup.program.rgb2hsv(GPUSetup.queue, (w, h), None, frame_buf, dest_buf)
-        # self.hsl = np.empty_like(frame)
-        # cl.enqueue_copy(GPUSetup.queue, self.hsl, dest_buf, origin=(0, 0), region=(w, h))
-        #
-        # # Apply mask
-        # frame_buf = cl.image_from_array(GPUSetup.context, self.hsl, 4)
-        # GPUSetup.program.hsvMask(GPUSetup.queue, (w, h), None, frame_buf, mask_buf, dest_buf)
-        # self.after_mask = np.empty_like(self.hsl)
-        # cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
-        #
-        # return self.after_mask
-        self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
-        # define range of blue color in HSV
-        lower_blue = np.array([165, 120, 70])
-        upper_blue = np.array([195, 255, 255])
-        # Threshold the HSV image to get only blue colors
-        mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
-        # Bitwise-AND mask and original image
-        self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
+        #*Load and convert source image
+        frame = np.array(self.frame)
+        
+        #*Set properties
+        h = frame.shape[0]
+        w = frame.shape[1]
+        mask = np.zeros((1, 2), cl.cltypes.float4)
+        mask[0, 0] = (165, 120, 70, 0)      #Lower bound 
+        mask[0, 1] = (195, 255, 255, 0)     #Upper bound
+        
+        #*Buffors
+        frame_buf = cl.image_from_array(GPUSetup.context, frame, 4)
+        fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
+        dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
+        mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=mask)
+        
+        #*RGB to HSV
+        GPUSetup.program.rgb2hsv(GPUSetup.queue, (w, h), None, frame_buf, dest_buf)
+        self.hsv = np.empty_like(frame)
+        cl.enqueue_copy(GPUSetup.queue, self.hsv, dest_buf, origin=(0, 0), region=(w, h))
+        
+        #*Apply mask
+        frame_buf = cl.image_from_array(GPUSetup.context, self.hsv, 4)
+        GPUSetup.program.hsvMask(GPUSetup.queue, (w, h), None, frame_buf,mask_buf, dest_buf)
+        self.after_mask = np.empty_like(frame)
+        cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
 
-    def connected_components(self, min_object_size=100):
+        return self.after_mask
+
+        # self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
+        # # define range of blue color in HSV
+        # lower_blue = np.array([165, 120, 70])
+        # upper_blue = np.array([195, 255, 255])
+        # # Threshold the HSV image to get only blue colors
+        # mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
+        # # Bitwise-AND mask and original image
+        # self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
+        # return self.after_mask
+
+
+    def connected_components(self, offset=5, min_object_size=100):
         self.frame_preprocessing()
         label = 1
         # Coordinates (indices [x, y]) of pixels with R channel (BGR code) greater than 40
@@ -66,68 +92,24 @@ class TrafficSignRecognition():
             labels[coord[0], coord[1]] = label
             label += 1
 
-        #labels_arr = np.array(labels).astype(np.float32)
-        labels_cc = np.zeros(shape=labels.shape, dtype=int)
-
-        # #Connecting pixels (8 connectivity)
-        # labels_cc = np.zeros(shape=labels.shape, dtype=int)
-        # labels_test = labels
-        # # Allocate device memory and move input data from the host to the device memory.
-        # mem_flags = cl.mem_flags
-        # # build input images buffer
-        # labels_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_WRITE | mem_flags.COPY_HOST_PTR, hostbuf=labels_test)
-        # # build destination OpenCL Image
-        # labels_cc_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_WRITE, labels_test.nbytes)
-        # # execute OpenCL function
-        # GPUSetup.program.connected_components(GPUSetup.queue, labels_test.shape, None, labels_buf, labels_cc_buf)
-        # cl.enqueue_copy(GPUSetup.queue, labels_cc, labels_cc_buf)
-        #
-        # #print(np.unique(labels))
-        # print(labels_cc)
-
         # Connecting pixels (8 connectivity)
         while True:
             try:
-                # Allocate device memory and move input data from the host to the device memory.
-                mem_flags = cl.mem_flags
-                # build input images buffer
-                labels_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_WRITE | mem_flags.COPY_HOST_PTR, hostbuf=labels)
-                # build destination OpenCL Image
-                labels_cc_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_WRITE, labels.nbytes)
-                # execute OpenCL function
-                GPUSetup.program.connected_components(GPUSetup.queue, labels.shape, None, labels_buf, labels_cc_buf)
-                cl.enqueue_copy(GPUSetup.queue, labels_cc, labels_cc_buf)
-
-                # If there is no difference between output and previous output then break
-                if((labels_cc==labels).all()):
+                break_flag = 1
+                for coord in coords:
+                    # (3+offset)x(3+offset) matrix with center of coord variable
+                    neighbouring_pixels = labels[coord[0] - 1 - offset:coord[0] + 2 + offset,
+                                          coord[1] - 1 - offset:coord[1] + 2 + offset]
+                    # Minimum value of label excluding 0
+                    min_label = np.min(neighbouring_pixels[np.nonzero(neighbouring_pixels)])
+                    # If any connection then keep loop
+                    if (labels[coord[0], coord[1]] > min_label):
+                        labels[coord[0], coord[1]] = min_label
+                        break_flag = 0
+                if break_flag:
                     break
-                # Else assign new labels from kernel to main variable of labels
-                else:
-                    labels=labels_cc
             except Exception as ex:
                 print(ex)
-        #np.savetxt("foo.csv", labels, delimiter=",", fmt="%d")
-        print(np.unique(labels))
-        #print(labels_cc)
-        #print(np.sum(labels_cc))
-        print(np.sum(labels))
-        # while True:
-        #     try:
-        #         break_flag = 1
-        #         for coord in coords:
-        #             # 3x3 matrix with center of coord variable
-        #             neighbouring_pixels = labels[coord[0] - 1:coord[0] + 2,
-        #                                   coord[1] - 1:coord[1] + 2]
-        #             # Minimum value of label excluding 0
-        #             min_label = np.min(neighbouring_pixels[np.nonzero(neighbouring_pixels)])
-        #             # If any connection then keep loop
-        #             if (labels[coord[0], coord[1]] > min_label):
-        #                 labels[coord[0], coord[1]] = min_label
-        #                 break_flag = 0
-        #         if break_flag:
-        #             break
-        #     except Exception as ex:
-        #         print(ex)
 
         # List of objects (unique label on frame)
         objects = np.unique(labels)
@@ -156,44 +138,50 @@ class TrafficSignRecognition():
             self.signs.append(sign)
             cv2.rectangle(self.frame, self.objects_coords[0][0], self.objects_coords[0][1], (0, 255, 0), 2)
 
-
         # for coord in coords:
         #     if labels[coord[0], coord[1]] > 0:
         #         self.after_mask[coord[0], coord[1]] = [255, 0, 0]
 
-        return self.frame
-        # for coord in coords:
-        #     if labels[coord[0], coord[1]] > 0:
-        #         self.after_mask[coord[0], coord[1]] = [255, 0, 0]
+        # return self.frame
+        for coord in coords:
+            if labels[coord[0], coord[1]] > 0:
+                self.after_mask[coord[0], coord[1]] = [255, 0, 0,0]
         self.templateSumSquare()
-        print(self.signs[0].type)
         return self.frame
+
 
     def templateSumSquare(self):
-        templates = Templates().templates
-        full_frame_img = cv2.cvtColor(self.frame, cv2.COLOR_RGB2GRAY)
+        print("***********************\nTemplates num: ", len(self.templates))
+        print("Signs num: ", len(self.signs))
+        # full_frame_img = cv2.cvtColor(self.hsv, cv2.COLOR_HSV2GRAY)
+        full_frame_img = self.hsv[:,:,2]
         results = []
-
-        # #!Temporary
-        # template_img2 = cv2.imread('templates/0.png')
-        # self.signs.append(Sign(x=10,y=10,height=10,width=10))
-        # #!--------
 
         for sign in self.signs:
             # Load sign + Otsu's thresholding and Gaussian filtering
-            frame_img = full_frame_img[sign.y:sign.y+sign.height, sign.x:sign.y+sign.width]
+            frame_img = full_frame_img[sign.y:sign.y+sign.height, sign.x:sign.x+sign.width]
             blur = cv2.GaussianBlur(frame_img,(5,5),0)
-            _, frame_arr = cv2.threshold(blur,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
-            frame_arr = np.array(frame_img).astype(np.float32)
+            _, frame_arr = cv2.threshold(frame_img,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
 
             single_sign_results = []
-            for template_img in templates:
+            for template in self.templates_hsv:
                 # Load template + Otsu's thresholding and Gaussian filtering for Template
-                template_img = cv2.resize(template_img, (sign.width, sign.height), interpolation = cv2.INTER_AREA)
-                template_img = cv2.cvtColor(template_img, cv2.COLOR_RGB2GRAY)
+                template_img = cv2.resize(template, (sign.width, sign.height), interpolation = cv2.INTER_AREA)     
+                # template_img = cv2.cvtColor(template_img, cv2.COLOR_HSV2GRAY)
+                template_img = template_img[:,:,2]
+
                 blur = cv2.GaussianBlur(template_img,(5,5),0)
-                _, template_arr = cv2.threshold(blur,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
-                template_arr = np.array(template_img).astype(np.float32)
+                _, template_arr = cv2.threshold(template_img,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
+
+
+            # *-----------------------------DEBUG---------------------------------
+                img_concate_Verti=np.concatenate((frame_arr, template_arr),axis=0)
+                cv2.imshow('concatenated_Verti',img_concate_Verti)
+                key = cv2.waitKey(10)
+                while(key!=ord('w')):
+                    key = cv2.waitKey(19)
+                    pass
+            # *-------------------------------------------------------------------
 
                 mem_flags = cl.mem_flags
                 # build input images buffer
@@ -210,7 +198,17 @@ class TrafficSignRecognition():
                 ssd = np.empty_like(template_arr)
                 cl.enqueue_copy(GPUSetup.queue, ssd, ssd_buf)
                 single_sign_results.append(np.sum(ssd))
+
             results.append(np.argmin(single_sign_results))
-            sign.type = np.argmin(single_sign_results)
-            print(sign.type)
+            if min(single_sign_results) < 8000:
+                sign.type = np.argmin(single_sign_results)
+
+            # *----------------------------DEBUG----------------------------------
+            if sign.type is not None:
+                print("\n++++++++++++++\nType: ", sign.type, "\nX: ",sign.x, "\nT: ", sign.y, "\nWidth: ", sign.width,"\nHeight: ", sign.height)
+                print("Sum squared errors: ", single_sign_results)
+            else:
+                print("\n--------------\nType: ", sign.type, "\nX: ",sign.x, "\nT: ", sign.y, "\nWidth: ", sign.width,"\nHeight: ", sign.height)
+                print("Sum squared errors: ", single_sign_results)
+            # *-------------------------------------------------------------------
         return results

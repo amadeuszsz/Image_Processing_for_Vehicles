@@ -56,6 +56,7 @@ def gpuTest():
     print(matrix_dot_vector)
 
 def main():
+
     while (cap.isOpened()):
         time_start = time.time()
         ret, frame = cap.read()
@@ -63,12 +64,14 @@ def main():
         #Do things here
         #x = LaneDetection(frame)
         #name, final_frame = x.lane_detection()
-        #signRecognizer = TrafficSignRecognition(frame)
+        signRecognizer = TrafficSignRecognition(frame)
         name = "Traffic Sign Recognition"
+        # final_frame = signRecognizer.frame_preprocessing()
         final_frame = TrafficSignRecognition(frame).connected_components()
-        #final_frame = signRecognizer.frame_preprocessing()
+
         #classification = signRecognizer.templateSumSquare()
         #######################################
+        final_frame = cv2.resize(final_frame, (960, 540))  
         cv2.imshow(name, final_frame)
         key = cv2.waitKey(1)
         if key == ord('q'):

@@ -87,23 +87,16 @@ __kernel void rgb2hsv(read_only image2d_t src, write_only image2d_t dest){
     write_imageui(dest, pos, pix);
 }
 
-__kernel void hsvMask(read_only image2d_t src, __global const float4 *matrix, write_only image2d_t dest){
+__kernel void hsvMask(read_only image2d_t src, __global const float4 *mask, write_only image2d_t dest){
     const sampler_t sampler =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
     int2 pos = (int2)(get_global_id(0), get_global_id(1));
     uint4 pix = read_imageui(src, sampler, pos);
 
-    /*
-    if(pix.x<=matrix[0][0] || pix.x >= matrix[1][0]){
+    if((pix.x < mask[0][0]) || (pix.x > mask[1][0]) || (pix.y < mask[0][1])){
         pix.x = 0;
         pix.y = 0;
         pix.z = 0;
+        pix.a = 0;
     }
-    if(pix.y<=matrix[0][1] || pix.y >= matrix[1][1]){
-        pix.y = 0;
-    }
-    if(pix.z<=matrix[0][2] || pix.z >= matrix[1][2]){
-        pix.z = 0;
-    }
-
-    */
+    write_imageui(dest, pos, pix);
 }
