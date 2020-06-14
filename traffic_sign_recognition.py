@@ -23,8 +23,8 @@ class TrafficSignRecognition():
         h = frame.shape[0]
         w = frame.shape[1]
         mask = np.zeros((1, 2), cl.cltypes.float4)
-        mask[0, 0] = (165, 120, 70, 0)
-        mask[0, 1] = (195, 255, 255, 0)
+        mask[0, 0] = (165, 120, 70, 0)      #Lower bound
+        mask[0, 1] = (195, 255, 255, 0)     #Upper bound
         
         #*Buffors
         frame_buf = cl.image_from_array(GPUSetup.context, frame, 4)
@@ -42,8 +42,6 @@ class TrafficSignRecognition():
         GPUSetup.program.hsvMask(GPUSetup.queue, (w, h), None, frame_buf,mask_buf, dest_buf)
         self.after_mask = np.empty_like(frame)
         cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
-        print(self.after_mask)
-
 
         return self.after_mask
         # self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
