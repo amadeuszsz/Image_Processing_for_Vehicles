@@ -139,17 +139,20 @@ class TrafficSignRecognition():
 
         return self.after_mask
 
-        # self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
-        # # define range of blue color in HSV
-        # lower_blue = np.array([165, 120, 70])
-        # upper_blue = np.array([195, 255, 255])
-        # # Threshold the HSV image to get only blue colors
-        # mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
-        # # Bitwise-AND mask and original image
-        # self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
-        # return self.after_mask
 
-    def connected_components(self, offset=5, min_object_size=100):
+    def frame_preprocessing_cv(self):
+        self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
+        # define range of blue color in HSV
+        lower_blue = np.array([165, 120, 70])
+        upper_blue = np.array([195, 255, 255])
+        # Threshold the HSV image to get only blue colors
+        mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
+        # Bitwise-AND mask and original image
+        self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
+        return self.after_mask
+
+
+    def connected_components(self, offset=5, min_object_size=100, min_sign_area = 1000, red_pix_ratio = 0.5):
         self.frame_preprocessing()
         label = 1
         # Coordinates (indices [x, y]) of pixels with R channel (BGR code) greater than 40
@@ -218,8 +221,12 @@ class TrafficSignRecognition():
                     if (coord[0] < most_top): most_top = coord[0]
                     if (coord[0] > most_bottom): most_bottom = coord[0]
             self.objects_coords.append([(most_left, most_top), (most_right, most_bottom)])
-            sign = Sign(x=most_left, y=most_top, width=most_right - most_left, height=most_bottom - most_top)
-            self.signs.append(sign)
+
+            area = (most_right - most_left) * (most_bottom-most_top)
+            if np.count_nonzero(labels == object)/area < red_pix_ratio:
+                if area > min_sign_area:                #Check size
+                    sign = Sign(x=most_left, y=most_top, width=most_right - most_left, height=most_bottom - most_top)
+                    self.signs.append(sign)
 
         #Drawing detected objects
         for sign in self.signs:
@@ -255,12 +262,12 @@ class TrafficSignRecognition():
                 template_arr = cv2.resize(template, (sign.width, sign.height), interpolation=cv2.INTER_AREA)
                 template_arr = np.ascontiguousarray(template_arr)
                 # # *-----------------------------DEBUG---------------------------------
-                img_concate_Verti = np.concatenate((frame_arr, template_arr), axis=0)
-                cv2.imshow('concatenated_Verti', img_concate_Verti)
-                key = cv2.waitKey(10)
-                while (key != ord('w')):
-                    key = cv2.waitKey(19)
-                    pass
+                # img_concate_Verti = np.concatenate((frame_arr, template_arr), axis=0)
+                # cv2.imshow('concatenated_Verti', img_concate_Verti)
+                # key = cv2.waitKey(10)
+                # while (key != ord('w')):
+                #     key = cv2.waitKey(19)
+                #     pass
                 # # *-------------------------------------------------------------------
 
                 mem_flags = cl.mem_flags
