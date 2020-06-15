@@ -4,13 +4,14 @@ import time
 import pyopencl as cl
 import pyopencl.cltypes
 import time
+import sys
 
 from lane_detection import LaneDetection
 from traffic_sign_recognition import TrafficSignRecognition
 from GPUSetup import GPUSetup
 
 #Video variables
-cap = cv2.VideoCapture('videos/video1.mp4')
+cap = cv2.VideoCapture('videos/video1.mp4') 
 fps = cap.get(cv2.CAP_PROP_FPS)
 
 
@@ -24,19 +25,19 @@ def sync_fps(time_start):
     if (timeDiff < 1.0 / (fps)):
         time.sleep(1.0 / (fps) - timeDiff)
 
-
-def main():
+def recognize_sign(path=None):
     signRecognizer = TrafficSignRecognition()
     name = "Traffic Sign Recognition"
-    window = cv2.namedWindow(name)
-    cv2.moveWindow(name, 150, 150)
+    if path is not None:
+        cap = cv2.VideoCapture(path) 
+    else:
+        cap = cv2.VideoCapture('videos/video1.mp4')       
 
     while (cap.isOpened()):
         time_start = time.time()
         ret, frame = cap.read()
 
         signRecognizer.load_new_frame(frame)
-        # final_frame = signRecognizer.frame_preprocessing()
         final_frame = signRecognizer.connected_components()
 
         # *-----------------------------DEBUG---------------------------------
@@ -51,10 +52,12 @@ def main():
             break
         if key == ord('w'):
             cv2.waitKey(-1)
-        # print("Total loop time: ", time.time() - time_start)
         # sync_fps(time_start=time_start)
     cap.release()
     cv2.destroyAllWindows()
+
+def main():
+    recognize_sign(sys.argv[1])
 
 
 if __name__ == "__main__":
