@@ -49,8 +49,29 @@ class DetectedObjects():
         for coord1 in self.objects_coords:
             for coord2 in self.objects_coords:
                 if (coord1 != coord2):
-                    #TODO
-                    pass
+                    #Checking if any corner of 1st rectangle is inside 2nd rectangle
+                    #Top left corner of coord2 inside coord1
+                    if((coord2.most_left >= coord1.most_left and coord2.most_left <= coord1.most_right
+                    and coord2.most_top >= coord1.most_top and coord2.most_top <= coord1.most_bottom)
+                    #Top right corner of coord2 inside coord1
+                    or (coord2.most_right >= coord1.most_left and coord2.most_right <= coord1.most_right
+                    and coord2.most_top >= coord1.most_top and coord2.most_top <= coord1.most_bottom)
+                    #Bottom left corner of coord2 inside coord1
+                    or (coord2.most_left >= coord1.most_left and coord2.most_left <= coord1.most_right
+                    and coord2.most_bottom >= coord1.most_top and coord2.most_bottom <= coord1.most_bottom)
+                    #Bottom right corner of coord2 inside coord1
+                    or (coord2.most_right >= coord1.most_left and coord2.most_right <= coord1.most_right
+                    and coord2.most_bottom >= coord1.most_top and coord2.most_bottom <= coord1.most_bottom)
+                    ):
+                        #Creating a new large rectangle by connecting coord1 and coord2
+                        obj_coord = ObjectCoords(most_left=min(coord1.most_left, coord2.most_left),
+                                                 most_right=max(coord1.most_right, coord2.most_right),
+                                                 most_top=min(coord1.most_top, coord2.most_top),
+                                                 most_bottom=max(coord1.most_bottom, coord2.most_bottom))
+                        self.objects_coords_merged.append(obj_coord)
+                        print("Rectangles merged: ", obj_coord)
+
+
 
 class ObjectCoords():
     def __init__(self, most_left, most_right, most_top, most_bottom):

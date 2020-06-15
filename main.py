@@ -11,7 +11,7 @@ from traffic_sign_recognition import TrafficSignRecognition
 from GPUSetup import GPUSetup
 
 #Video variables
-cap = cv2.VideoCapture('videos/video5.mp4')
+cap = cv2.VideoCapture('videos/video1.mp4')
 fps = cap.get(cv2.CAP_PROP_FPS)
 
 
@@ -31,7 +31,7 @@ def recognize_sign(path=None):
     if path is not None:
         cap = cv2.VideoCapture(path)
     else:
-        cap = cv2.VideoCapture('videos/video1.mp4')
+        cap = cv2.VideoCapture('videos/video2.mp4')
 
     while (cap.isOpened()):
         time_start = time.time()
@@ -58,8 +58,7 @@ def recognize_sign(path=None):
     cv2.destroyAllWindows()
 
 def main():
-    recognize_sign(sys.argv[1])
-
+    recognize_sign()
 
 if __name__ == "__main__":
     main()
