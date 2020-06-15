@@ -87,7 +87,6 @@ __kernel void hsvMask(read_only image2d_t src, __global const float4 *mask, writ
     int2 pos = (int2)(get_global_id(0), get_global_id(1));
     uint4 pix = read_imageui(src, sampler, pos);
 
-
     if((pix.x < mask[0].s0) || (pix.x > mask[1].s0) || (pix.y < mask[0].s1)){
         pix.x = 0;
         pix.y = 0;

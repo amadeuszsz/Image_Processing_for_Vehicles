@@ -5,19 +5,17 @@ import pyopencl.cltypes
 import glob
 import os, sys
 import time
+
 from sign import Sign
 from GPUSetup import GPUSetup
 
 
 class TrafficSignRecognition():
-    def __init__(self, frame):
-        self.frame = cv2.cvtColor(frame, cv2.COLOR_RGB2RGBA)
-        self.height, self.width, self.channels = frame.shape
-        self.objects_coords = []
-        self.signs = []
+    def __init__(self):
         self.templates = []
         self.templates_hsv = []
         self.template_preprocesing()
+
 
     def template_preprocesing(self):
         for filename in glob.iglob(os.getcwd() + '/templates/*.png', recursive=True):
@@ -37,6 +35,14 @@ class TrafficSignRecognition():
             cl.enqueue_copy(GPUSetup.queue, template_hsv, dest_buf, origin=(0, 0), region=(w, h))
             self.templates_hsv.append(template_hsv)
 
+
+    def load_new_frame(self, frame):
+        self.frame = cv2.cvtColor(frame, cv2.COLOR_RGB2RGBA)
+        self.height, self.width, self.channels = frame.shape
+        self.objects_coords = []
+        self.signs = []
+
+
     def frame_preprocessing(self):
         # *Load and convert source image
         frame = np.array(self.frame)
@@ -52,7 +58,6 @@ class TrafficSignRecognition():
         frame_buf = cl.image_from_array(GPUSetup.context, frame, 4)
         fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
         dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
-        mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=mask)
 
         # *RGB to HSV
         GPUSetup.program.rgb2hsv(GPUSetup.queue, (w, h), None, frame_buf, dest_buf)
@@ -61,6 +66,7 @@ class TrafficSignRecognition():
 
         # *Apply mask
         frame_buf = cl.image_from_array(GPUSetup.context, self.hsv, 4)
+        mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=mask)
         GPUSetup.program.hsvMask(GPUSetup.queue, (w, h), None, frame_buf, mask_buf, dest_buf)
         self.after_mask = np.empty_like(frame)
         cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
@@ -123,31 +129,7 @@ class TrafficSignRecognition():
         print("Elapsed time in kernels: ", timer_kernel)
         print("Elapsed time python: ", timer)
         print("Labels connected. Transitions: ", transitions)
-        #print(labels)
 
-        # Connecting pixels (8 connectivity)
-        # start_time= time.time()
-        # while True:
-        #     try:
-        #         break_flag = 1
-        #         for coord in coords:
-        #             # (3+offset)x(3+offset) matrix with center of coord variable
-        #             neighbouring_pixels = labels[coord[0] - 1 - offset:coord[0] + 2 + offset,
-        #                                   coord[1] - 1 - offset:coord[1] + 2 + offset]
-        #             # Minimum value of label excluding 0
-        #             min_label = np.min(neighbouring_pixels[np.nonzero(neighbouring_pixels)])
-        #             # If any connection then keep loop
-        #             if (labels[coord[0], coord[1]] > min_label):
-        #                 labels[coord[0], coord[1]] = min_label
-        #                 break_flag = 0
-        #         if break_flag:
-        #             break
-        #     except Exception as ex:
-        #         print(ex)
-        # elapsed_time = time.time() - start_time
-        # print("Elapsed time python: ", elapsed_time)
-
-        # List of objects (unique label on frame)
         objects = np.unique(labels)
         objects = np.delete(objects, np.where(objects == 0))
 
@@ -181,43 +163,46 @@ class TrafficSignRecognition():
         for key, sign in enumerate(self.signs):
             sign.print_info(key)
 
-        # for coord in coords:
-        #     if labels[coord[0], coord[1]] > 0:
-        #         self.after_mask[coord[0], coord[1]] = [255, 0, 0, 0]
-        #self.templateSumSquare()
+        for coord in coords:
+            if labels[coord[0], coord[1]] > 0:
+                self.after_mask[coord[0], coord[1]] = [255, 0, 0, 0]
+        self.templateSumSquare()
         return self.frame
+
 
     def templateSumSquare(self):
         print("***********************\nTemplates num: ", len(self.templates))
         print("Signs num: ", len(self.signs))
-        # full_frame_img = cv2.cvtColor(self.hsv, cv2.COLOR_HSV2GRAY)
-        full_frame_img = self.hsv[:, :, 2]
+
+        full_frame_img = self.hsv[:,:,2]
         results = []
 
+        start_time = time.time()
         for sign in self.signs:
             # Load sign + Otsu's thresholding and Gaussian filtering
-            frame_img = full_frame_img[sign.y:sign.y + sign.height, sign.x:sign.x + sign.width]
-            blur = cv2.GaussianBlur(frame_img, (5, 5), 0)
-            _, frame_arr = cv2.threshold(frame_img, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            frame_img = full_frame_img[sign.y:sign.y+sign.height, sign.x:sign.x+sign.width]
+            blur = cv2.GaussianBlur(frame_img,(5,5),0)
+            _, frame_arr = cv2.threshold(frame_img,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
+            # frame_arr = frame_img
 
             single_sign_results = []
             for template in self.templates_hsv:
                 # Load template + Otsu's thresholding and Gaussian filtering for Template
                 template_img = cv2.resize(template, (sign.width, sign.height), interpolation=cv2.INTER_AREA)
-                # template_img = cv2.cvtColor(template_img, cv2.COLOR_HSV2GRAY)
-                template_img = template_img[:, :, 2]
+                template_img = template_img[:,:,2]
 
-                blur = cv2.GaussianBlur(template_img, (5, 5), 0)
-                _, template_arr = cv2.threshold(template_img, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+                blur = cv2.GaussianBlur(template_img,(5,5),0)
+                _, template_arr = cv2.threshold(template_img,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
+                # template_arr=template_img
 
-                # *-----------------------------DEBUG---------------------------------
+                # # *-----------------------------DEBUG---------------------------------
                 img_concate_Verti = np.concatenate((frame_arr, template_arr), axis=0)
                 cv2.imshow('concatenated_Verti', img_concate_Verti)
                 key = cv2.waitKey(10)
                 while (key != ord('w')):
                     key = cv2.waitKey(19)
                     pass
-                # *-------------------------------------------------------------------
+                # # *-------------------------------------------------------------------
 
                 mem_flags = cl.mem_flags
                 # build input images buffer
@@ -251,4 +236,8 @@ class TrafficSignRecognition():
                       "\nHeight: ", sign.height)
                 print("Sum squared errors: ", single_sign_results)
             # *-------------------------------------------------------------------
+
+
+        elapsed_time = time.time() - start_time
+        print("Sign recognition time: ", elapsed_time)
         return results
