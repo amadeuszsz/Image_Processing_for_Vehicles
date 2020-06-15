@@ -99,4 +99,4 @@ __kernel void hsvMask(read_only image2d_t src, __global const float4 *mask, writ
         pix.a = 0;
     }
     write_imageui(dest, pos, pix);
-}
+    }
