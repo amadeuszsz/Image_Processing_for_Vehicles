@@ -10,7 +10,7 @@ from traffic_sign_recognition import TrafficSignRecognition
 from GPUSetup import GPUSetup
 
 #Video variables
-cap = cv2.VideoCapture('videos/video2.mp4')
+cap = cv2.VideoCapture('videos/video1.mp4')
 fps = cap.get(cv2.CAP_PROP_FPS)
 
 
@@ -41,7 +41,7 @@ def main():
 
         # *-----------------------------DEBUG---------------------------------
         # img_concate_Verti = np.concatenate((signRecognizer.frame, signRecognizer.hsv, signRecognizer.after_mask), axis=0)
-        # img_concate_Verti = cv2.resize(img_concate_Verti, (960, 640))  
+        # img_concate_Verti = cv2.resize(img_concate_Verti, (960, 640))
         # cv2.imshow('concatenated_Verti', img_concate_Verti)
         # *-------------------------------------------------------------------
         final_frame = cv2.resize(final_frame, (960, 540))  

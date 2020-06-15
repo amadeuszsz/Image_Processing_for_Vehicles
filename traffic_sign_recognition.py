@@ -119,24 +119,24 @@ class TrafficSignRecognition():
         mask = np.zeros((1, 2), cl.cltypes.float4)
         mask[0, 0] = (165, 120, 70, 0)  # Lower bound
         mask[0, 1] = (195, 255, 255, 0)  # Upper bound
-        
+
         # *Buffors
         frame_buf = cl.image_from_array(GPUSetup.context, frame, 4)
         fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
         dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
-        
+
         # *RGB to HSV
         GPUSetup.program.rgb2hsv(GPUSetup.queue, (w, h), None, frame_buf, dest_buf)
         self.hsv = np.empty_like(frame)
         cl.enqueue_copy(GPUSetup.queue, self.hsv, dest_buf, origin=(0, 0), region=(w, h))
-        
+
         # *Apply mask
         frame_buf = cl.image_from_array(GPUSetup.context, self.hsv, 4)
         mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=mask)
         GPUSetup.program.hsv_mask(GPUSetup.queue, (w, h), None, frame_buf, mask_buf, dest_buf)
         self.after_mask = np.empty_like(frame)
         cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
-        
+
         return self.after_mask
 
         # self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
@@ -165,11 +165,12 @@ class TrafficSignRecognition():
         transitions = 0
         timer = 0;
         timer_kernel = 0;
+
         while True:
             try:
                 start_time_kernel = time.time()
                 mem_flags = cl.mem_flags
-                # build input & destination OpenCL Image
+                # build input & destination labels array
                 labels_cc_buf = cl.Buffer(GPUSetup.context,  mem_flags.READ_WRITE | mem_flags.COPY_HOST_PTR, size=labels.nbytes, hostbuf=labels)
                 # execute OpenCL function
                 GPUSetup.program.connected_components(GPUSetup.queue, labels.shape, None, labels_cc_buf)
@@ -194,7 +195,7 @@ class TrafficSignRecognition():
         print("Elapsed time in kernels: ", timer_kernel)
         print("Elapsed time python: ", timer)
         print("Labels connected. Transitions: ", transitions)
- 
+
         objects = np.unique(labels)
         objects = np.delete(objects, np.where(objects == 0))
 
@@ -219,7 +220,14 @@ class TrafficSignRecognition():
             self.objects_coords.append([(most_left, most_top), (most_right, most_bottom)])
             sign = Sign(x=most_left, y=most_top, width=most_right - most_left, height=most_bottom - most_top)
             self.signs.append(sign)
-            cv2.rectangle(self.frame, self.objects_coords[0][0], self.objects_coords[0][1], (0, 255, 0), 2)
+
+        #Drawing detected objects
+        for sign in self.signs:
+            cv2.rectangle(self.frame, (sign.x, sign.y), (sign.x+sign.width, sign.y+sign.height), (0, 255, 0), 2)
+
+        #Printing objects data
+        for key, sign in enumerate(self.signs):
+            sign.print_info(key)
 
         for coord in coords:
             if labels[coord[0], coord[1]] > 0:
