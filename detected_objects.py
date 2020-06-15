@@ -9,12 +9,14 @@ class DetectedObjects():
         self.height = height
         self.objects = np.unique(labels)
         self.objects_coords = []
-        self.objects_coords_merged = []
+        self.objects_coords_to_delete = []
+        self.objects_coords_to_append = []
         self.signs = []
         self.min_obj_size = min_obj_size
         self.select_objects()
         self.getting_coords()
-        self.merging_coords()
+        self.finding_intersecting_rectangles()
+        self.redefinition_rectangles_coords()
 
     def select_objects(self):
         self.objects = np.delete(self.objects, np.where(self.objects == 0))
@@ -39,13 +41,7 @@ class DetectedObjects():
             obj_coord = ObjectCoords(most_left, most_right, most_top, most_bottom)
             self.objects_coords.append(obj_coord)
 
-
-            sign = Sign(x=obj_coord.most_left, y=obj_coord.most_top, width=obj_coord.most_right - obj_coord.most_left,
-                        height=obj_coord.most_bottom - obj_coord.most_top)
-            self.signs.append(sign)
-
-
-    def merging_coords(self):
+    def finding_intersecting_rectangles(self):
         for coord1 in self.objects_coords:
             for coord2 in self.objects_coords:
                 if (coord1 != coord2):
@@ -63,14 +59,31 @@ class DetectedObjects():
                     or (coord2.most_right >= coord1.most_left and coord2.most_right <= coord1.most_right
                     and coord2.most_bottom >= coord1.most_top and coord2.most_bottom <= coord1.most_bottom)
                     ):
-                        #Creating a new large rectangle by connecting coord1 and coord2
-                        obj_coord = ObjectCoords(most_left=min(coord1.most_left, coord2.most_left),
+                        # Appending intersecting rectangles to the delete list
+                        if(not coord1 in self.objects_coords_to_delete and  not coord2 in self.objects_coords_to_delete):
+                            self.objects_coords_to_delete.append(coord1)
+                            self.objects_coords_to_delete.append(coord2)
+
+                        # Creating a new large rectangle by connecting coord1 and coord2 and adding it to appending list
+                        obj_coord_new = ObjectCoords(most_left=min(coord1.most_left, coord2.most_left),
                                                  most_right=max(coord1.most_right, coord2.most_right),
                                                  most_top=min(coord1.most_top, coord2.most_top),
                                                  most_bottom=max(coord1.most_bottom, coord2.most_bottom))
-                        self.objects_coords_merged.append(obj_coord)
-                        print("Rectangles merged: ", obj_coord)
+                        self.objects_coords_to_append.append(obj_coord_new)
+                        print("Rectangles merged: ", obj_coord_new)
 
+    def redefinition_rectangles_coords(self):
+        for rectangle in self.objects_coords_to_delete:
+            self.objects_coords.remove(rectangle)
+        for rectangle in self.objects_coords_to_append:
+            self.objects_coords.append(rectangle)
+
+        for obj_coord in self.objects_coords:
+            sign = Sign(x=obj_coord.most_left, y=obj_coord.most_top, width=obj_coord.most_right - obj_coord.most_left,
+                        height=obj_coord.most_bottom - obj_coord.most_top)
+            self.signs.append(sign)
+
+        print("Redefinition")
 
 
 class ObjectCoords():
