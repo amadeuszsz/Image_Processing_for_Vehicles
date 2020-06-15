@@ -13,26 +13,23 @@ __kernel void square_sum(__global float *template, __global float *frame, __glob
     output[gid] = pow((template[gid] - frame[gid]),2);
 }
 
-__kernel void connected_components(__global int *labels)
+__kernel void connected_components(const int w, const int h, __global int *labels)
 {
-    int w = 1920;
-    int h = 1080;
     int x = get_global_id(1);
     int y = get_global_id(0);
     if (x == 0 || y == 0 || x >= w-1 || y >= h-1) return;
     int idx = y*(w*2) + x*2;
+    if(labels[idx] == 0) return;
 
-    int min_label = get_min_label(labels, idx);
+    int min_label = get_min_label(labels, idx, w, h);
     if (min_label != 0)
     {
         labels[idx] = min_label;
     }
 }
 
-int get_min_label(global int *labels, int idx) { // returns the smallest label stored in the connected adjacent pixels.
+int get_min_label(global int *labels, int idx, int w, int h) { // returns the smallest label stored in the connected adjacent pixels.
   int min_label = labels[idx];
-  int w = 1920;
-  int h = 1080;
 
   for(int y=-1;y<=1;y++) {
     for(int x=-1;x<=1;x++) {
@@ -95,4 +92,4 @@ __kernel void hsvMask(read_only image2d_t src, __global const float4 *mask, writ
     }
 
     write_imageui(dest, pos, pix);
-}
+    }

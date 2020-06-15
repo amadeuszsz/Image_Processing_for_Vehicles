@@ -8,7 +8,7 @@ import time
 
 from sign import Sign
 from GPUSetup import GPUSetup
-
+from detected_objects import DetectedObjects, ObjectCoords
 
 class TrafficSignRecognition():
     def __init__(self):
@@ -83,7 +83,7 @@ class TrafficSignRecognition():
         # self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
         # return self.after_mask
 
-    def connected_components(self, offset=5, min_object_size=100):
+    def connected_components(self, offset=5, min_object_size=500):
         self.frame_preprocessing()
         label = 1
         # Coordinates (indices [x, y]) of pixels with R channel (BGR code) greater than 40
@@ -107,7 +107,7 @@ class TrafficSignRecognition():
                 # build input & destination labels array
                 labels_cc_buf = cl.Buffer(GPUSetup.context,  mem_flags.READ_WRITE | mem_flags.COPY_HOST_PTR, size=labels.nbytes, hostbuf=labels)
                 # execute OpenCL function
-                GPUSetup.program.connected_components(GPUSetup.queue, labels.shape, None, labels_cc_buf)
+                GPUSetup.program.connected_components(GPUSetup.queue, labels.shape, None, np.int32(self.width), np.int32(self.height), labels_cc_buf)
                 # copy result back to host
                 labels_cc = np.empty_like(labels)
                 cl.enqueue_copy(GPUSetup.queue, labels_cc, labels_cc_buf)
@@ -130,30 +130,9 @@ class TrafficSignRecognition():
         print("Elapsed time python: ", timer)
         print("Labels connected. Transitions: ", transitions)
 
-        objects = np.unique(labels)
-        objects = np.delete(objects, np.where(objects == 0))
-
-        # Rejecting small objects
-        for object in objects:
-            if np.count_nonzero(labels == object) < min_object_size:
-                labels[labels == object] = 0
-                objects = np.delete(objects, np.where(objects == object))
-
-        # Getting coords of objects
-        for object in objects:
-            most_left = self.width
-            most_right = 0
-            most_top = self.height
-            most_bottom = 0
-            for coord in coords:
-                if labels[coord[0], coord[1]] == object:
-                    if (coord[1] < most_left): most_left = coord[1]
-                    if (coord[1] > most_right): most_right = coord[1]
-                    if (coord[0] < most_top): most_top = coord[0]
-                    if (coord[0] > most_bottom): most_bottom = coord[0]
-            self.objects_coords.append([(most_left, most_top), (most_right, most_bottom)])
-            sign = Sign(x=most_left, y=most_top, width=most_right - most_left, height=most_bottom - most_top)
-            self.signs.append(sign)
+        detected_objects = DetectedObjects(labels, coords, self.width, self.height)
+        self.objects_coords = detected_objects.objects_coords
+        self.signs = detected_objects.signs
 
         #Drawing detected objects
         for sign in self.signs:
@@ -166,9 +145,8 @@ class TrafficSignRecognition():
         for coord in coords:
             if labels[coord[0], coord[1]] > 0:
                 self.after_mask[coord[0], coord[1]] = [255, 0, 0, 0]
-        self.templateSumSquare()
+        #self.templateSumSquare()
         return self.frame
-
 
     def templateSumSquare(self):
         print("***********************\nTemplates num: ", len(self.templates))
