@@ -154,25 +154,26 @@ class TrafficSignRecognition():
         print("***********************\nTemplates num: ", len(self.templates))
         print("Signs num: ", len(self.signs))
         # full_frame_img = cv2.cvtColor(self.hsv, cv2.COLOR_HSV2GRAY)
-        full_frame_img = self.hsv[:,:,2]
+        full_frame_img = self.hsv[:,:,0]
         results = []
 
         for sign in self.signs:
             # Load sign + Otsu's thresholding and Gaussian filtering
             frame_img = full_frame_img[sign.y:sign.y+sign.height, sign.x:sign.x+sign.width]
-            blur = cv2.GaussianBlur(frame_img,(5,5),0)
-            _, frame_arr = cv2.threshold(frame_img,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
+            # blur = cv2.GaussianBlur(frame_img,(5,5),0)
+            # _, frame_arr = cv2.threshold(frame_img,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
+            frame_arr = frame_img
 
             single_sign_results = []
             for template in self.templates_hsv:
                 # Load template + Otsu's thresholding and Gaussian filtering for Template
                 template_img = cv2.resize(template, (sign.width, sign.height), interpolation = cv2.INTER_AREA)     
                 # template_img = cv2.cvtColor(template_img, cv2.COLOR_HSV2GRAY)
-                template_img = template_img[:,:,2]
+                template_img = template_img[:,:,0]
 
-                blur = cv2.GaussianBlur(template_img,(5,5),0)
-                _, template_arr = cv2.threshold(template_img,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
-
+                # blur = cv2.GaussianBlur(template_img,(5,5),0)
+                # _, template_arr = cv2.threshold(template_img,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
+                template_arr =template_img
 
             # *-----------------------------DEBUG---------------------------------
                 img_concate_Verti=np.concatenate((frame_arr, template_arr),axis=0)
