@@ -23,8 +23,8 @@ __kernel void connected_components(__global int *labels)
     int idx = y*(w*2) + x*2;
 
     int min_label = get_min_label(labels, idx);
-
-    if (min_label != 0) {
+    if (min_label != 0)
+    {
         labels[idx] = min_label;
     }
 }
@@ -86,13 +86,14 @@ __kernel void hsvMask(read_only image2d_t src, __global const float4 *mask, writ
     const sampler_t sampler =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
     int2 pos = (int2)(get_global_id(0), get_global_id(1));
     uint4 pix = read_imageui(src, sampler, pos);
-    /*
-    if((pix.x < mask[0][0]) || (pix.x > mask[1][0]) || (pix.y < mask[0][1])){
+
+
+    if((pix.x < mask[0].s0) || (pix.x > mask[1].s0) || (pix.y < mask[0].s1)){
         pix.x = 0;
         pix.y = 0;
         pix.z = 0;
-        pix.a = 0;
+        //pix.a = 0;
     }
-    */
+
     write_imageui(dest, pos, pix);
-    }
+}
