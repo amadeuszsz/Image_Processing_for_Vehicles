@@ -13,39 +13,34 @@ __kernel void square_sum(__global float *template, __global float *frame, __glob
     output[gid] = pow((template[gid] - frame[gid]),2);
 }
 
-__kernel void connected_components(__global int *labels,
-__global int *labels_cc)
+__kernel void connected_components(__global int *labels)
 {
     int w = 1920;
     int h = 1080;
     int x = get_global_id(1);
     int y = get_global_id(0);
-    int padding = w;
+    if (x == 0 || y == 0 || x >= w-1 || y >= h-1) return;
     int idx = y*(w*2) + x*2;
-    //labels_cc[idx] = idx;
-    int mask[9];
 
-    //3x3 matrix with center of labels[idx]
-    mask[0] = labels[idx - 2*w - 2];
-    mask[1] = labels[idx - 2*w];
-    mask[2] = labels[idx - 2*w + 2];
-    mask[3] = labels[idx - 2];
-    mask[4] = labels[idx];
-    mask[5] = labels[idx + 2];
-    mask[6] = labels[idx + 2*w - 2];
-    mask[7] = labels[idx + 2*w];
-    mask[8] = labels[idx + 2*w + 2];
+    int min_label = get_min_label(labels, idx);
 
-    int min_label = labels[idx];
-    for(int i=0; i<9; i++) {
-        if(mask[i] < min_label && mask[i] > 0){
-            min_label = mask[i];
-        }
+    if (min_label != 0) {
+        labels[idx] = min_label;
     }
+}
 
-    labels[idx] = min_label;
-    labels_cc[idx] = labels[idx];
+int get_min_label(global int *labels, int idx) { // returns the smallest label stored in the connected adjacent pixels.
+  int min_label = labels[idx];
+  int w = 1920;
+  int h = 1080;
 
+  for(int y=-1;y<=1;y++) {
+    for(int x=-1;x<=1;x++) {
+      int idx_m = idx + y*(w*2) + x*2;
+      if (labels[idx_m] != 0 && labels[idx_m] < min_label) min_label = labels[idx_m];
+    }
+  }
+  return min_label;
 }
 
 __kernel void rgb2hsv(read_only image2d_t src, write_only image2d_t dest){
@@ -91,12 +86,13 @@ __kernel void hsvMask(read_only image2d_t src, __global const float4 *mask, writ
     const sampler_t sampler =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
     int2 pos = (int2)(get_global_id(0), get_global_id(1));
     uint4 pix = read_imageui(src, sampler, pos);
-
+    /*
     if((pix.x < mask[0][0]) || (pix.x > mask[1][0]) || (pix.y < mask[0][1])){
         pix.x = 0;
         pix.y = 0;
         pix.z = 0;
         pix.a = 0;
     }
+    */
     write_imageui(dest, pos, pix);
     }

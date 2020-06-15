@@ -41,41 +41,41 @@ class TrafficSignRecognition():
         # *Load and convert source image
         frame = np.array(self.frame)
 
-        # *Set properties
-        h = frame.shape[0]
-        w = frame.shape[1]
-        mask = np.zeros((1, 2), cl.cltypes.float4)
-        mask[0, 0] = (165, 120, 70, 0)  # Lower bound
-        mask[0, 1] = (195, 255, 255, 0)  # Upper bound
-
-        # *Buffors
-        frame_buf = cl.image_from_array(GPUSetup.context, frame, 4)
-        fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
-        dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
-        mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=mask)
-
-        # *RGB to HSV
-        GPUSetup.program.rgb2hsv(GPUSetup.queue, (w, h), None, frame_buf, dest_buf)
-        self.hsv = np.empty_like(frame)
-        cl.enqueue_copy(GPUSetup.queue, self.hsv, dest_buf, origin=(0, 0), region=(w, h))
-
-        # *Apply mask
-        frame_buf = cl.image_from_array(GPUSetup.context, self.hsv, 4)
-        GPUSetup.program.hsvMask(GPUSetup.queue, (w, h), None, frame_buf, mask_buf, dest_buf)
-        self.after_mask = np.empty_like(frame)
-        cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
-
-        return self.after_mask
-
-        # self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
-        # # define range of blue color in HSV
-        # lower_blue = np.array([165, 120, 70])
-        # upper_blue = np.array([195, 255, 255])
-        # # Threshold the HSV image to get only blue colors
-        # mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
-        # # Bitwise-AND mask and original image
-        # self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
+        # # *Set properties
+        # h = frame.shape[0]
+        # w = frame.shape[1]
+        # mask = np.zeros((1, 2), cl.cltypes.float4)
+        # mask[0, 0] = (165, 120, 70, 0)  # Lower bound
+        # mask[0, 1] = (195, 255, 255, 0)  # Upper bound
+        #
+        # # *Buffors
+        # frame_buf = cl.image_from_array(GPUSetup.context, frame, 4)
+        # fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
+        # dest_buf = cl.Image(GPUSetup.context, cl.mem_flags.WRITE_ONLY, fmt, shape=(w, h))
+        # mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=mask)
+        #
+        # # *RGB to HSV
+        # GPUSetup.program.rgb2hsv(GPUSetup.queue, (w, h), None, frame_buf, dest_buf)
+        # self.hsv = np.empty_like(frame)
+        # cl.enqueue_copy(GPUSetup.queue, self.hsv, dest_buf, origin=(0, 0), region=(w, h))
+        #
+        # # *Apply mask
+        # frame_buf = cl.image_from_array(GPUSetup.context, self.hsv, 4)
+        # GPUSetup.program.hsvMask(GPUSetup.queue, (w, h), None, frame_buf, mask_buf, dest_buf)
+        # self.after_mask = np.empty_like(frame)
+        # cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
+        #
         # return self.after_mask
+
+        self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
+        # define range of blue color in HSV
+        lower_blue = np.array([165, 120, 70])
+        upper_blue = np.array([195, 255, 255])
+        # Threshold the HSV image to get only blue colors
+        mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
+        # Bitwise-AND mask and original image
+        self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
+        return self.after_mask
 
     def connected_components(self, offset=5, min_object_size=100):
         self.frame_preprocessing()
@@ -89,24 +89,61 @@ class TrafficSignRecognition():
             labels[coord[0], coord[1]] = label
             label += 1
 
-        # Connecting pixels (8 connectivity)
+        # #Checking kernel output
+        # mem_flags = cl.mem_flags
+        # # build input images buffer
+        # labels_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_WRITE | mem_flags.COPY_HOST_PTR,
+        #                        hostbuf=labels)
+        # # build destination OpenCL Image
+        # labels_cc_buf = cl.Buffer(GPUSetup.context, mem_flags.WRITE_ONLY, labels.nbytes)
+        # # execute OpenCL function
+        # GPUSetup.program.connected_components(GPUSetup.queue, labels.shape, None, labels_buf, labels_cc_buf)
+        # # copy result back to host
+        # labels_cc = np.empty_like(labels)
+        # cl.enqueue_copy(GPUSetup.queue, labels_cc, labels_cc_buf)
+        # print(labels_cc)
+
+
+        # Connecting pixels using kernels (8 connectivity)
+        transitions = 0
         while True:
             try:
-                break_flag = 1
-                for coord in coords:
-                    # (3+offset)x(3+offset) matrix with center of coord variable
-                    neighbouring_pixels = labels[coord[0] - 1 - offset:coord[0] + 2 + offset,
-                                          coord[1] - 1 - offset:coord[1] + 2 + offset]
-                    # Minimum value of label excluding 0
-                    min_label = np.min(neighbouring_pixels[np.nonzero(neighbouring_pixels)])
-                    # If any connection then keep loop
-                    if (labels[coord[0], coord[1]] > min_label):
-                        labels[coord[0], coord[1]] = min_label
-                        break_flag = 0
-                if break_flag:
+                mem_flags = cl.mem_flags
+                # build input & destination OpenCL Image
+                labels_cc_buf = cl.Buffer(GPUSetup.context,  mem_flags.READ_WRITE | mem_flags.COPY_HOST_PTR, size=labels.nbytes, hostbuf=labels)
+                # execute OpenCL function
+                GPUSetup.program.connected_components(GPUSetup.queue, labels.shape, None, labels_cc_buf)
+                # copy result back to host
+                labels_cc = np.empty_like(labels)
+                cl.enqueue_copy(GPUSetup.queue, labels_cc, labels_cc_buf)
+                if((labels_cc==labels).all()):
                     break
+                else:
+                    labels=labels_cc
+                    transitions += 1
             except Exception as ex:
                 print(ex)
+
+        print("Labels connected. Transitions: ", transitions)
+
+        # # Connecting pixels (8 connectivity)
+        # while True:
+        #     try:
+        #         break_flag = 1
+        #         for coord in coords:
+        #             # (3+offset)x(3+offset) matrix with center of coord variable
+        #             neighbouring_pixels = labels[coord[0] - 1 - offset:coord[0] + 2 + offset,
+        #                                   coord[1] - 1 - offset:coord[1] + 2 + offset]
+        #             # Minimum value of label excluding 0
+        #             min_label = np.min(neighbouring_pixels[np.nonzero(neighbouring_pixels)])
+        #             # If any connection then keep loop
+        #             if (labels[coord[0], coord[1]] > min_label):
+        #                 labels[coord[0], coord[1]] = min_label
+        #                 break_flag = 0
+        #         if break_flag:
+        #             break
+        #     except Exception as ex:
+        #         print(ex)
 
         # List of objects (unique label on frame)
         objects = np.unique(labels)
