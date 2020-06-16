@@ -7,7 +7,7 @@ __global const float4 *vector, __global float *result)
     result[gid] = dot(matrix[gid], vector[0]);
 }
 
-__kernel void square_sum(__global double *template, __global double *frame, __global double *output)
+__kernel void square_sum(__global float *template, __global float *frame, __global float *output)
 {
     int gid = get_global_id(0);
     output[gid] = pow((template[gid] - frame[gid]),2);

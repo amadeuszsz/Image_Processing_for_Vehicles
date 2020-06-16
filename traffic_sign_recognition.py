@@ -16,11 +16,21 @@ class TrafficSignRecognition():
         self.templates_hsv = []
         self.templates_mask = []
         self.template_preprocesing()
+        self.old_signs = []
+
+
+    def sort_filenames(self, filename):     #extract just file name (which is number and later index)
+        filename = filename[::-1]
+        return (int)((filename[4:filename.find('/')])[::-1])
 
 
     def template_preprocesing(self):
+        names = []
         for filename in glob.iglob(os.getcwd() + '/templates/*.png', recursive=True):
-            template = cv2.cvtColor(cv2.imread(filename), cv2.COLOR_RGB2RGBA)
+            names.append(filename)
+
+        for name in sorted(names, key=self.sort_filenames):
+            template = cv2.cvtColor(cv2.imread(name), cv2.COLOR_RGB2RGBA)
             self.templates.append(template)
 
             h = template.shape[0]
@@ -108,6 +118,7 @@ class TrafficSignRecognition():
         self.height, self.width, self.channels = frame.shape
         self.objects_coords = []
         self.signs = []
+        self.marked_fame = frame
 
 
     def frame_preprocessing(self):
@@ -138,18 +149,6 @@ class TrafficSignRecognition():
         self.after_mask = np.empty_like(frame)
         cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
 
-        return self.after_mask
-
-
-    def frame_preprocessing_cv(self):
-        self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
-        # define range of blue color in HSV
-        lower_blue = np.array([165, 120, 70])
-        upper_blue = np.array([195, 255, 255])
-        # Threshold the HSV image to get only blue colors
-        mask = cv2.inRange(self.hsv, lower_blue, upper_blue)
-        # Bitwise-AND mask and original image
-        self.after_mask = cv2.bitwise_and(self.frame, self.frame, mask=mask)
         return self.after_mask
 
 
@@ -197,6 +196,7 @@ class TrafficSignRecognition():
                     transitions += 1
             except Exception as ex:
                 print(ex)
+        print("\n______NEW_FRAME_______")
         print("Elapsed time in kernels: ", timer_kernel)
         print("Elapsed time python: ", timer)
         print("Labels connected. Transitions: ", transitions)
@@ -220,67 +220,64 @@ class TrafficSignRecognition():
         elapsed_time_all = time.time() - start_time_all
         print("Whole Sign Detection: ", elapsed_time_all)
         self.templateSumSquare()
-        return self.frame
+        return self.frame[:,:,:3], self.marked_fame
 
 
-    def templateSumSquare(self):
-        print("***********************\nTemplates num: ", len(self.templates))
-        print("Signs num: ", len(self.signs))
-
-        full_frame_img = self.hsv
-        results = []
-
+    def templateSumSquare(self, error_limit = 10000, old_sign_err_mult = 0.9, old_sign_pix_diff=20):
         start_time = time.time()
         for sign in self.signs:
-            # Load sign + masking and binaryzation
-            frame_img = full_frame_img[sign.y:sign.y+sign.height, sign.x:sign.x+sign.width]
-            frame_masked =  np.array(self.clear_sign(frame_img)[:,:,2]).astype(np.float64)
+            #*Load sign + masking and binaryzation
+            frame_img = self.hsv[sign.y:sign.y+sign.height, sign.x:sign.x+sign.width]
+            frame_masked =  np.array(self.clear_sign(frame_img)[:,:,2]).astype(np.float32)
             frame_masked_flat = frame_masked.flatten()
 
             single_sign_results = []
             for template in self.templates_mask:
+                #*Load template + masking and binaryzation
                 template_arr = cv2.resize(template, (sign.width, sign.height), interpolation=cv2.INTER_AREA)
-                template_masked = np.array(template_arr[:,:,2]).astype(np.float64)
+                template_masked = np.array(template_arr[:,:,2]).astype(np.float32)
                 template_masked_flat = template_masked.flatten()
 
-                # # *-----------------------------DEBUG---------------------------------
-                # cv2.imshow('TEMPLATE_MASK',template_masked)
-                # cv2.imshow('FRAME_MASK',frame_masked)
-
-                # key = cv2.waitKey(10)
-                # while (key != ord('w')):
-                #     key = cv2.waitKey(19)
-                #     pass
-                # # *-------------------------------------------------------------------
-
-                #Calculate error/difference
+                #*Calculate error/difference
                 template_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR,hostbuf=template_masked_flat)
                 frame_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR,hostbuf=frame_masked_flat)
                 ssd_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.WRITE_ONLY, template_masked_flat.nbytes)
                 GPUSetup.program.square_sum(GPUSetup.queue, template_masked_flat.shape, None, template_buf, frame_buf, ssd_buf)
 
-                # copy result back to host
+                #*copy result back to host
                 ssd = np.empty_like(template_masked_flat)
                 cl.enqueue_copy(GPUSetup.queue, ssd, ssd_buf)
                 single_sign_results.append(np.sum(ssd)/len(ssd))
-                print(single_sign_results)
 
-            results.append(np.argmin(single_sign_results))
-            # if min(single_sign_results) < 8000:
-            sign.type = np.argmin(single_sign_results)
+            #*Take into account previous frame classification
+            for old_sign in self.old_signs: 
+                if(old_sign.type is not None):
+                    if (np.abs(old_sign.x-sign.x) < old_sign_pix_diff) and (np.abs(old_sign.y-sign.y) < old_sign_pix_diff):
+                        single_sign_results[old_sign.type] *= old_sign_err_mult
+            if min(single_sign_results) < error_limit:
+                sign.type = np.argmin(single_sign_results)
 
-            # *----------------------------DEBUG----------------------------------
+            # *--------------------------DEBUG/INFO-------------------------------
             if sign.type is not None:
-                print("\n++++++++++++++\nType: ", sign.type, " | X: ", sign.x, " | Y: ", sign.y, " | Width: ", sign.width,
+                print("\n+++Sign recognized+++\nType: ", sign.type, " | X: ", sign.x, " | Y: ", sign.y, " | Width: ", sign.width,
                     " | Height: ", sign.height)
-                print("Sum squared errors: ", single_sign_results)
+                print("Min Sum squared errors: ", min(single_sign_results))
             else:
-                print("\n--------------\nType: ", sign.type, " | X: ", sign.x, " | Y: ", sign.y, " | Width: ", sign.width,
+                print("\n-----Not a Sign------\nType: ", sign.type, " | X: ", sign.x, " | Y: ", sign.y, " | Width: ", sign.width,
                     " | Height: ", sign.height)
-                print("Sum squared errors: ", single_sign_results)
+                print("Min Sum squared errors: ", min(single_sign_results))
             # *-------------------------------------------------------------------
-            break
+
+        #*Update history
+        self.old_signs = self.signs
+
+        #* Visualy overlap result on self.marked_frame
+        for sign in self.signs:
+            if sign.type is not None:
+                template_arr = cv2.resize(self.templates_mask[sign.type], (sign.width, sign.height), interpolation=cv2.INTER_AREA)
+                template_masked = np.array(template_arr[:,:,2]).astype(np.float32)
+                template_masked = np.dstack((template_masked,template_masked,template_masked))
+                self.marked_fame[sign.y:sign.y+sign.height, sign.x:sign.x+sign.width] = template_masked
 
         elapsed_time = time.time() - start_time
         print("Sign recognition time: ", elapsed_time)
-        return results

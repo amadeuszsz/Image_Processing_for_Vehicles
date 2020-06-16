@@ -5,6 +5,7 @@ import pyopencl as cl
 import pyopencl.cltypes
 import time
 import sys
+import imutils
 
 from lane_detection import LaneDetection
 from traffic_sign_recognition import TrafficSignRecognition
@@ -38,8 +39,9 @@ def recognize_sign(path=None):
         ret, frame = cap.read()
 
         signRecognizer.load_new_frame(frame)
-        final_frame = signRecognizer.connected_components()
-        final_frame = cv2.resize(final_frame, (960, 540))  
+        original_frame, marked_frame = signRecognizer.connected_components()
+        final_frame = np.concatenate((original_frame, marked_frame), axis=0)
+        final_frame = imutils.resize(final_frame, height=800)  
         cv2.imshow(name, final_frame)
         key = cv2.waitKey(1)
         if key == ord('q'):
@@ -52,7 +54,7 @@ def recognize_sign(path=None):
     cv2.destroyAllWindows()
 
 def main():
-    recognize_sign()
+    recognize_sign(sys.argv[1])
 
 if __name__ == "__main__":
     main()
