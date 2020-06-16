@@ -83,14 +83,15 @@ class DetectedObjects():
                             if(obj_coord_new not in self.objects_coords_to_append):
                                 self.objects_coords_to_append.append(obj_coord_new)
 
-                            # CHecking if merged rectangles already exists in append list
+                            # Checking if merged rectangles already exists in append list
                             if(coord1 in self.objects_coords_to_append):
                                 self.objects_coords_to_append.remove(coord1)
                             if (coord2 in self.objects_coords_to_append):
                                 self.objects_coords_to_append.remove(coord2)
 
-                            #self.objects_coords_to_delete = np.unique(self.objects_coords_to_delete)
-                            #self.objects_coords_to_append = np.unique(self.objects_coords_to_append)
+                            # Removing duplicates
+                            self.objects_coords_to_delete = list(set(self.objects_coords_to_delete))
+                            self.objects_coords_to_append = list(set(self.objects_coords_to_append))
 
                             print("\nRectangles merged.\nRectangle 1 -> Left top: {0}x{1}, Right bottom: {2}x{3}\n"
                                   "Rectangle 2 -> Left top: {4}x{5}, Right bottom: {6}x{7}\n"
@@ -122,5 +123,16 @@ class ObjectCoords():
         self.most_top = most_top
         self.most_bottom = most_bottom
 
+    def __eq__(self, other):
+        return self.most_left == other.most_left\
+        and self.most_right == other.most_right\
+        and self.most_top == other.most_top\
+        and self.most_bottom == other.most_bottom
+
+    def __hash__(self):
+        return hash(('most_left', self.most_left,
+                     'most_right', self.most_right,
+                     'most_top', self.most_top,
+                     'most_bottom', self.most_bottom))
 
 
