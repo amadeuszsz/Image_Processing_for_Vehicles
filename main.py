@@ -39,12 +39,6 @@ def recognize_sign(path=None):
 
         signRecognizer.load_new_frame(frame)
         final_frame = signRecognizer.connected_components()
-
-        # *-----------------------------DEBUG---------------------------------
-        # img_concate_Verti = np.concatenate((signRecognizer.frame, signRecognizer.hsv, signRecognizer.after_mask), axis=0)
-        # img_concate_Verti = cv2.resize(img_concate_Verti, (960, 640))
-        # cv2.imshow('concatenated_Verti', img_concate_Verti)
-        # *-------------------------------------------------------------------
         final_frame = cv2.resize(final_frame, (960, 540))  
         cv2.imshow(name, final_frame)
         key = cv2.waitKey(1)

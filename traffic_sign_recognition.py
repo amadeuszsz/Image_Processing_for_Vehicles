@@ -48,12 +48,12 @@ class TrafficSignRecognition():
         cont_img_hsv = np.ascontiguousarray(img_hsv)
 
         red_mask = np.zeros((1, 2), cl.cltypes.float4)
-        red_mask[0, 0] = (165, 90, 70, 0)  # Lower bound red
-        red_mask[0, 1] = (195, 255, 255, 0)  # Upper bound red
+        red_mask[0, 0] = (150, 70, 40, 0)  # Lower bound red
+        red_mask[0, 1] = (210, 255, 255, 0)  # Upper bound red
         
         black_mask = np.zeros((1, 2), cl.cltypes.float4)
         black_mask[0, 0] = (0, 0, 0, 0)  # Lower bound black
-        black_mask[0, 1] = (255, 255, 90, 0)  # Upper bound black
+        black_mask[0, 1] = (255, 255, 100, 0)  # Upper bound black
 
         #*Buffors
         fmt = cl.ImageFormat(cl.channel_order.RGBA, cl.channel_type.UNSIGNED_INT8)
@@ -69,7 +69,7 @@ class TrafficSignRecognition():
         #*Black mask
         img_buf = cl.image_from_array(GPUSetup.context, cont_img_hsv, 4)
         mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=black_mask)
-        GPUSetup.program.hsv_bin_mask(GPUSetup.queue, (w, h), None, img_buf, mask_buf, dest_buf)
+        GPUSetup.program.hsv_bin_mask_center(GPUSetup.queue, (w, h), None, img_buf, mask_buf, np.int32(w), np.int32(h), dest_buf)
         img_mask_black = np.empty_like(cont_img_hsv)
         cl.enqueue_copy(GPUSetup.queue, img_mask_black, dest_buf, origin=(0, 0), region=(w, h))
 
@@ -88,7 +88,8 @@ class TrafficSignRecognition():
 
         # cv2.imshow('Original and HSV', img_concate_Verti)
         # cv2.imshow('Gray', img_gray)
-        # cv2.imshow("Otsu", img_otsu)
+        # cv2.imshow("Otsu by cv", img_otsu)
+        # cv2.imshow("Hsv", img_hsv)
         # cv2.imshow("After Red Mask",img_mask_red)
         # cv2.imshow("After Black Mask",img_mask_black)
         # cv2.imshow("Merge of masks", img_merge)
@@ -117,7 +118,7 @@ class TrafficSignRecognition():
         h = frame.shape[0]
         w = frame.shape[1]
         mask = np.zeros((1, 2), cl.cltypes.float4)
-        mask[0, 0] = (165, 120, 70, 0)  # Lower bound
+        mask[0, 0] = (165, 90, 70, 0)  # Lower bound
         mask[0, 1] = (195, 255, 255, 0)  # Upper bound
 
         # *Buffors
@@ -154,6 +155,7 @@ class TrafficSignRecognition():
 
     def connected_components(self, offset=5, min_object_size=100, min_sign_area = 1000, red_pix_ratio = 0.5):
         self.frame_preprocessing()
+        start_time_all = time.time()
         label = 1
         # Coordinates (indices [x, y]) of pixels with R channel (BGR code) greater than 40
         coords = np.argwhere(self.after_mask[:, :, 2] > 40)
@@ -239,6 +241,9 @@ class TrafficSignRecognition():
         for coord in coords:
             if labels[coord[0], coord[1]] > 0:
                 self.after_mask[coord[0], coord[1]] = [255, 0, 0, 0]
+
+        elapsed_time_all = time.time() - start_time_all
+        print("Whole Sign Detection: ", elapsed_time_all)
         self.templateSumSquare()
         return self.frame
 
@@ -254,55 +259,52 @@ class TrafficSignRecognition():
         for sign in self.signs:
             # Load sign + masking and binaryzation
             frame_img = full_frame_img[sign.y:sign.y+sign.height, sign.x:sign.x+sign.width]
-            frame_arr =  np.ascontiguousarray(self.clear_sign(frame_img))
+            frame_masked =  np.array(self.clear_sign(frame_img)[:,:,2]).astype(np.float64)
+            frame_masked_flat = frame_masked.flatten()
 
             single_sign_results = []
             for template in self.templates_mask:
-                # Load template + Otsu's thresholding and Gaussian filtering for Template
                 template_arr = cv2.resize(template, (sign.width, sign.height), interpolation=cv2.INTER_AREA)
-                template_arr = np.ascontiguousarray(template_arr)
-                # # *-----------------------------DEBUG---------------------------------
-                # img_concate_Verti = np.concatenate((frame_arr, template_arr), axis=0)
-                # cv2.imshow('concatenated_Verti', img_concate_Verti)
-                # key = cv2.waitKey(10)
-                # while (key != ord('w')):
-                #     key = cv2.waitKey(19)
-                #     pass
-                # # *-------------------------------------------------------------------
+                template_masked = np.array(template_arr[:,:,2]).astype(np.float64)
+                template_masked_flat = template_masked.flatten()
 
-                mem_flags = cl.mem_flags
-                # build input images buffer
-                template_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_ONLY | mem_flags.COPY_HOST_PTR,
-                                         hostbuf=template_arr)
-                frame_buf = cl.Buffer(GPUSetup.context, mem_flags.READ_ONLY | mem_flags.COPY_HOST_PTR,
-                                      hostbuf=frame_arr)
+                # *-----------------------------DEBUG---------------------------------
+                cv2.imshow('TEMPLATE_MASK',template_masked)
+                cv2.imshow('FRAME_MASK',frame_masked)
 
-                # build destination OpenCL Image
-                ssd_buf = cl.Buffer(GPUSetup.context, mem_flags.WRITE_ONLY, template_arr.nbytes)
+                key = cv2.waitKey(10)
+                while (key != ord('w')):
+                    key = cv2.waitKey(19)
+                    pass
+                # *-------------------------------------------------------------------
 
-                # execute OpenCL function
-                GPUSetup.program.square_sum(GPUSetup.queue, template_arr.shape, None, template_buf, frame_buf, ssd_buf)
+                #Calculate error/difference
+                template_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR,hostbuf=template_masked_flat)
+                frame_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR,hostbuf=frame_masked_flat)
+                ssd_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.WRITE_ONLY, template_masked_flat.nbytes)
+                GPUSetup.program.square_sum(GPUSetup.queue, template_masked_flat.shape, None, template_buf, frame_buf, ssd_buf)
 
                 # copy result back to host
-                ssd = np.empty_like(template_arr)
+                ssd = np.empty_like(template_masked_flat)
                 cl.enqueue_copy(GPUSetup.queue, ssd, ssd_buf)
-                single_sign_results.append(np.sum(ssd))
+                single_sign_results.append(np.sum(ssd)/len(ssd))
+                print(single_sign_results)
 
             results.append(np.argmin(single_sign_results))
-            if min(single_sign_results) < 8000:
-                sign.type = np.argmin(single_sign_results)
+            # if min(single_sign_results) < 8000:
+            sign.type = np.argmin(single_sign_results)
 
             # *----------------------------DEBUG----------------------------------
             if sign.type is not None:
-                print("\n++++++++++++++\nType: ", sign.type, "\nX: ", sign.x, "\nT: ", sign.y, "\nWidth: ", sign.width,
-                      "\nHeight: ", sign.height)
+                print("\n++++++++++++++\nType: ", sign.type, " | X: ", sign.x, " | Y: ", sign.y, " | Width: ", sign.width,
+                    " | Height: ", sign.height)
                 print("Sum squared errors: ", single_sign_results)
             else:
-                print("\n--------------\nType: ", sign.type, "\nX: ", sign.x, "\nT: ", sign.y, "\nWidth: ", sign.width,
-                      "\nHeight: ", sign.height)
+                print("\n--------------\nType: ", sign.type, " | X: ", sign.x, " | Y: ", sign.y, " | Width: ", sign.width,
+                    " | Height: ", sign.height)
                 print("Sum squared errors: ", single_sign_results)
             # *-------------------------------------------------------------------
-
+            break
 
         elapsed_time = time.time() - start_time
         print("Sign recognition time: ", elapsed_time)

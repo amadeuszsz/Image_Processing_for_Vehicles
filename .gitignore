@@ -1,3 +1,5 @@
 *.pyc
 env
 videos
+raport/screens
+.DS_Store

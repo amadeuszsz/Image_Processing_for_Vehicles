@@ -7,7 +7,7 @@ __global const float4 *vector, __global float *result)
     result[gid] = dot(matrix[gid], vector[0]);
 }
 
-__kernel void square_sum(__global float *template, __global float *frame, __global float *output)
+__kernel void square_sum(__global double *template, __global double *frame, __global double *output)
 {
     int gid = get_global_id(0);
     output[gid] = pow((template[gid] - frame[gid]),2);
@@ -114,6 +114,36 @@ __kernel void hsv_bin_mask(read_only image2d_t src, __global const float4 *mask,
         pix.y = 0;
         pix.z = 0;      
     }
+    
+    write_imageui(dest, pos, pix);
+}
+
+__kernel void hsv_bin_mask_center(read_only image2d_t src, __global const float4 *mask,const int w, const int h, write_only image2d_t dest){
+    const sampler_t sampler =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
+    int2 pos = (int2)(get_global_id(0), get_global_id(1));
+    uint4 pix = read_imageui(src, sampler, pos);
+    
+    if ((pos[0] > 0.2*w) && (pos[0] < 0.8*w) && (pos[1] > 0.2*h) && (pos[1] < 0.8*h)){
+        if((pix.x < mask[0].s0) || (pix.x > mask[1].s0) ||
+            (pix.y < mask[0].s1) || (pix.y > mask[1].s1) || 
+            (pix.z < mask[0].s2) || (pix.z > mask[1].s2)){
+            pix.x = 255;
+            pix.y = 255;
+            pix.z = 255;
+            // pix.a = 0;
+        }
+        else{
+            pix.x = 0;
+            pix.y = 0;
+            pix.z = 0;      
+        }
+    }
+    else{
+        pix.x = 255;
+        pix.y = 255;
+        pix.z = 255;      
+    }
+
     
     write_imageui(dest, pos, pix);
 }
