@@ -8,7 +8,7 @@ import time
 
 from sign import Sign
 from GPUSetup import GPUSetup
-
+from detected_objects import DetectedObjects, ObjectCoords
 
 class TrafficSignRecognition():
     def __init__(self):
@@ -40,7 +40,7 @@ class TrafficSignRecognition():
             # *Apply masks
             template_mask = self.clear_sign(template_hsv, template)
             self.templates_mask.append(template_mask)
-    
+
 
     def clear_sign(self,img_hsv, img=None):
         h = img_hsv.shape[0]
@@ -73,7 +73,7 @@ class TrafficSignRecognition():
         img_mask_black = np.empty_like(cont_img_hsv)
         cl.enqueue_copy(GPUSetup.queue, img_mask_black, dest_buf, origin=(0, 0), region=(w, h))
 
-        #*Merge both 
+        #*Merge both
         img_buff_red = cl.image_from_array(GPUSetup.context, img_mask_red, 4)
         img_buff_black = cl.image_from_array(GPUSetup.context, img_mask_black, 4)
         GPUSetup.program.merge_bin(GPUSetup.queue, (w, h), None, img_buff_red, img_buff_black, dest_buf)
@@ -153,7 +153,7 @@ class TrafficSignRecognition():
         return self.after_mask
 
 
-    def connected_components(self, offset=5, min_object_size=100, min_sign_area = 1000, red_pix_ratio = 0.5):
+    def connected_components(self, offset=5, min_object_size=500):
         self.frame_preprocessing()
         start_time_all = time.time()
         label = 1
@@ -178,7 +178,7 @@ class TrafficSignRecognition():
                 # build input & destination labels array
                 labels_cc_buf = cl.Buffer(GPUSetup.context,  mem_flags.READ_WRITE | mem_flags.COPY_HOST_PTR, size=labels.nbytes, hostbuf=labels)
                 # execute OpenCL function
-                GPUSetup.program.connected_components(GPUSetup.queue, labels.shape, None, labels_cc_buf)
+                GPUSetup.program.connected_components(GPUSetup.queue, labels.shape, None, np.int32(self.width), np.int32(self.height), labels_cc_buf)
                 # copy result back to host
                 labels_cc = np.empty_like(labels)
                 cl.enqueue_copy(GPUSetup.queue, labels_cc, labels_cc_buf)
@@ -201,34 +201,9 @@ class TrafficSignRecognition():
         print("Elapsed time python: ", timer)
         print("Labels connected. Transitions: ", transitions)
 
-        objects = np.unique(labels)
-        objects = np.delete(objects, np.where(objects == 0))
-
-        # Rejecting small objects
-        for object in objects:
-            if np.count_nonzero(labels == object) < min_object_size:
-                labels[labels == object] = 0
-                objects = np.delete(objects, np.where(objects == object))
-
-        # Getting coords of objects
-        for object in objects:
-            most_left = self.width
-            most_right = 0
-            most_top = self.height
-            most_bottom = 0
-            for coord in coords:
-                if labels[coord[0], coord[1]] == object:
-                    if (coord[1] < most_left): most_left = coord[1]
-                    if (coord[1] > most_right): most_right = coord[1]
-                    if (coord[0] < most_top): most_top = coord[0]
-                    if (coord[0] > most_bottom): most_bottom = coord[0]
-            self.objects_coords.append([(most_left, most_top), (most_right, most_bottom)])
-
-            area = (most_right - most_left) * (most_bottom-most_top)
-            if np.count_nonzero(labels == object)/area < red_pix_ratio:
-                if area > min_sign_area:                #Check size
-                    sign = Sign(x=most_left, y=most_top, width=most_right - most_left, height=most_bottom - most_top)
-                    self.signs.append(sign)
+        detected_objects = DetectedObjects(labels, coords, self.width, self.height)
+        self.objects_coords = detected_objects.objects_coords
+        self.signs = detected_objects.signs
 
         #Drawing detected objects
         for sign in self.signs:

@@ -13,26 +13,23 @@ __kernel void square_sum(__global double *template, __global double *frame, __gl
     output[gid] = pow((template[gid] - frame[gid]),2);
 }
 
-__kernel void connected_components(__global int *labels)
+__kernel void connected_components(const int w, const int h, __global int *labels)
 {
-    int w = 1920;
-    int h = 1080;
     int x = get_global_id(1);
     int y = get_global_id(0);
     if (x == 0 || y == 0 || x >= w-1 || y >= h-1) return;
     int idx = y*(w*2) + x*2;
+    if(labels[idx] == 0) return;
 
-    int min_label = get_min_label(labels, idx);
+    int min_label = get_min_label(labels, idx, w, h);
     if (min_label != 0)
     {
         labels[idx] = min_label;
     }
 }
 
-int get_min_label(global int *labels, int idx) { // returns the smallest label stored in the connected adjacent pixels.
+int get_min_label(global int *labels, int idx, int w, int h) { // returns the smallest label stored in the connected adjacent pixels.
   int min_label = labels[idx];
-  int w = 1920;
-  int h = 1080;
 
   for(int y=-1;y<=1;y++) {
     for(int x=-1;x<=1;x++) {
@@ -100,9 +97,9 @@ __kernel void hsv_bin_mask(read_only image2d_t src, __global const float4 *mask,
     const sampler_t sampler =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
     int2 pos = (int2)(get_global_id(0), get_global_id(1));
     uint4 pix = read_imageui(src, sampler, pos);
-    
+
     if((pix.x < mask[0].s0) || (pix.x > mask[1].s0) ||
-        (pix.y < mask[0].s1) || (pix.y > mask[1].s1) || 
+        (pix.y < mask[0].s1) || (pix.y > mask[1].s1) ||
         (pix.z < mask[0].s2) || (pix.z > mask[1].s2)){
         pix.x = 255;
         pix.y = 255;
@@ -112,9 +109,9 @@ __kernel void hsv_bin_mask(read_only image2d_t src, __global const float4 *mask,
     else{
         pix.x = 0;
         pix.y = 0;
-        pix.z = 0;      
+        pix.z = 0;
     }
-    
+
     write_imageui(dest, pos, pix);
 }
 
@@ -153,7 +150,7 @@ __kernel void merge_bin(read_only image2d_t src, read_only image2d_t src2, write
     int2 pos = (int2)(get_global_id(0), get_global_id(1));
     uint4 pix1 = read_imageui(src, sampler, pos);
     uint4 pix2 = read_imageui(src2, sampler, pos);
-    
+
     if (pix1.x == 0 || pix2.x == 0){
         pix1.x = 0;
         pix1.y = 0;
@@ -164,6 +161,6 @@ __kernel void merge_bin(read_only image2d_t src, read_only image2d_t src2, write
         pix1.y = 255;
         pix1.z = 255;
     }
-    
+
     write_imageui(dest, pos, pix1);
 }
