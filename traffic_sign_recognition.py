@@ -268,15 +268,15 @@ class TrafficSignRecognition():
                 template_masked = np.array(template_arr[:,:,2]).astype(np.float64)
                 template_masked_flat = template_masked.flatten()
 
-                # *-----------------------------DEBUG---------------------------------
-                cv2.imshow('TEMPLATE_MASK',template_masked)
-                cv2.imshow('FRAME_MASK',frame_masked)
+                # # *-----------------------------DEBUG---------------------------------
+                # cv2.imshow('TEMPLATE_MASK',template_masked)
+                # cv2.imshow('FRAME_MASK',frame_masked)
 
-                key = cv2.waitKey(10)
-                while (key != ord('w')):
-                    key = cv2.waitKey(19)
-                    pass
-                # *-------------------------------------------------------------------
+                # key = cv2.waitKey(10)
+                # while (key != ord('w')):
+                #     key = cv2.waitKey(19)
+                #     pass
+                # # *-------------------------------------------------------------------
 
                 #Calculate error/difference
                 template_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR,hostbuf=template_masked_flat)
