@@ -15,7 +15,6 @@ from GPUSetup import GPUSetup
 cap = cv2.VideoCapture('videos/video1.mp4')
 fps = cap.get(cv2.CAP_PROP_FPS)
 
-
 def sync_fps(time_start):
     '''
     Sleeping function. Wait until reach desired frame rate.
@@ -37,7 +36,6 @@ def recognize_sign(path=None):
     while (cap.isOpened()):
         time_start = time.time()
         ret, frame = cap.read()
-
         signRecognizer.load_new_frame(frame)
         original_frame, marked_frame = signRecognizer.connected_components()
         final_frame = np.concatenate((original_frame, marked_frame), axis=0)
@@ -54,7 +52,8 @@ def recognize_sign(path=None):
     cv2.destroyAllWindows()
 
 def main():
-    recognize_sign(sys.argv[1])
+    #recognize_sign(sys.argv[1])
+    recognize_sign()
 
 if __name__ == "__main__":
     main()

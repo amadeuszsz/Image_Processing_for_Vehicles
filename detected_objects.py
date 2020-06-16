@@ -92,18 +92,14 @@ class DetectedObjects():
                             # Removing duplicates
                             self.objects_coords_to_delete = list(set(self.objects_coords_to_delete))
                             self.objects_coords_to_append = list(set(self.objects_coords_to_append))
-
+                            '''
                             print("\nRectangles merged.\nRectangle 1 -> Left top: {0}x{1}, Right bottom: {2}x{3}\n"
                                   "Rectangle 2 -> Left top: {4}x{5}, Right bottom: {6}x{7}\n"
                                   "Rectangle N -> Left top: {8}x{9}, Right bottom: {10}x{11}"
                                   .format(coord1.most_left, coord1.most_top, coord1.most_right, coord1.most_bottom,
                                           coord2.most_left, coord2.most_top, coord2.most_right, coord2.most_bottom,
                                           new_most_left, new_most_top, new_most_right, new_most_bottom))
-                            #print("Merging flag in a loop: ", merging_flag)
-            #print("Merging flag at the end: ", merging_flag)
-            if not merging_flag:
-                break
-
+                            '''
 
     def redefinition_rectangles_coords(self):
         for rectangle in self.objects_coords_to_delete:
@@ -134,5 +130,3 @@ class ObjectCoords():
                      'most_right', self.most_right,
                      'most_top', self.most_top,
                      'most_bottom', self.most_bottom))
-
-

@@ -1,4 +1,3 @@
-
 class Sign():
     def __init__(self,x,y,width,height):
         self.width = width
@@ -15,6 +14,4 @@ class Sign():
         top_right = [self.x + self.width, self.y]
         bottom_left = [self.x, self.y + self.height]
         bottom_right = [self.x + self.width, self.y + self.height]
-
         return top_left, top_right, bottom_left, bottom_right
-

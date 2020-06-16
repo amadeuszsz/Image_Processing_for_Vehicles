@@ -5,10 +5,9 @@ import pyopencl.cltypes
 import glob
 import os, sys
 import time
-
 from sign import Sign
 from GPUSetup import GPUSetup
-from detected_objects import DetectedObjects, ObjectCoords
+from detected_objects import DetectedObjects
 
 class TrafficSignRecognition():
     def __init__(self):
@@ -18,11 +17,9 @@ class TrafficSignRecognition():
         self.template_preprocesing()
         self.old_signs = []
 
-
     def sort_filenames(self, filename):     #extract just file name (which is number and later index)
         filename = filename[::-1]
         return (int)((filename[4:filename.find('/')])[::-1])
-
 
     def template_preprocesing(self):
         names = []
@@ -50,7 +47,6 @@ class TrafficSignRecognition():
             # *Apply masks
             template_mask = self.clear_sign(template_hsv, template)
             self.templates_mask.append(template_mask)
-
 
     def clear_sign(self,img_hsv, img=None):
         h = img_hsv.shape[0]
@@ -112,14 +108,12 @@ class TrafficSignRecognition():
 
         return img_merge
 
-
     def load_new_frame(self, frame):
         self.frame = cv2.cvtColor(frame, cv2.COLOR_RGB2RGBA)
         self.height, self.width, self.channels = frame.shape
         self.objects_coords = []
         self.signs = []
         self.marked_fame = frame
-
 
     def frame_preprocessing(self):
         # *Load and convert source image
@@ -148,9 +142,7 @@ class TrafficSignRecognition():
         GPUSetup.program.hsv_mask(GPUSetup.queue, (w, h), None, frame_buf, mask_buf, dest_buf)
         self.after_mask = np.empty_like(frame)
         cl.enqueue_copy(GPUSetup.queue, self.after_mask, dest_buf, origin=(0, 0), region=(w, h))
-
         return self.after_mask
-
 
     def connected_components(self, offset=5, min_object_size=500):
         self.frame_preprocessing()
@@ -169,7 +161,6 @@ class TrafficSignRecognition():
         transitions = 0
         timer = 0;
         timer_kernel = 0;
-
         while True:
             try:
                 start_time_kernel = time.time()
@@ -209,19 +200,10 @@ class TrafficSignRecognition():
         for sign in self.signs:
             cv2.rectangle(self.frame, (sign.x, sign.y), (sign.x+sign.width, sign.y+sign.height), (0, 255, 0), 2)
 
-        #Printing objects data
-        for key, sign in enumerate(self.signs):
-            sign.print_info(key)
-
-        for coord in coords:
-            if labels[coord[0], coord[1]] > 0:
-                self.after_mask[coord[0], coord[1]] = [255, 0, 0, 0]
-
         elapsed_time_all = time.time() - start_time_all
         print("Whole Sign Detection: ", elapsed_time_all)
         self.templateSumSquare()
         return self.frame[:,:,:3], self.marked_fame
-
 
     def templateSumSquare(self, error_limit = 10000, old_sign_err_mult = 0.9, old_sign_pix_diff=20):
         start_time = time.time()
