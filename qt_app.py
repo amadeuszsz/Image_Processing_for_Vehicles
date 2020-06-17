@@ -16,7 +16,6 @@ import time
 import imutils
 import os
 
-from lane_detection import LaneDetection
 from traffic_sign_recognition import TrafficSignRecognition
 from GPUSetup import GPUSetup
 

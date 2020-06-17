@@ -57,6 +57,10 @@ class TrafficSignRecognition():
         red_mask[0, 0] = (150, 70, 40, 0)  # Lower bound red
         red_mask[0, 1] = (210, 255, 255, 0)  # Upper bound red
 
+        blue_mask = np.zeros((1, 2), cl.cltypes.float4)
+        blue_mask[0, 0] = (10, 90, 70, 0)  # Lower bound red
+        blue_mask[0, 1] = (25, 255, 255, 0)  # Upper bound red
+
         black_mask = np.zeros((1, 2), cl.cltypes.float4)
         black_mask[0, 0] = (0, 0, 0, 0)  # Lower bound black
         black_mask[0, 1] = (255, 255, 100, 0)  # Upper bound black
@@ -72,6 +76,13 @@ class TrafficSignRecognition():
         img_mask_red = np.empty_like(cont_img_hsv)
         cl.enqueue_copy(GPUSetup.queue, img_mask_red, dest_buf, origin=(0, 0), region=(w, h))
 
+        # *Blue mask
+        img_buf = cl.image_from_array(GPUSetup.context, cont_img_hsv, 4)
+        mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=blue_mask)
+        GPUSetup.program.hsv_bin_mask(GPUSetup.queue, (w, h), None, img_buf, mask_buf, dest_buf)
+        img_mask_blue = np.empty_like(cont_img_hsv)
+        cl.enqueue_copy(GPUSetup.queue, img_mask_blue, dest_buf, origin=(0, 0), region=(w, h))
+
         # *Black mask
         img_buf = cl.image_from_array(GPUSetup.context, cont_img_hsv, 4)
         mask_buf = cl.Buffer(GPUSetup.context, cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=black_mask)
@@ -80,10 +91,16 @@ class TrafficSignRecognition():
         img_mask_black = np.empty_like(cont_img_hsv)
         cl.enqueue_copy(GPUSetup.queue, img_mask_black, dest_buf, origin=(0, 0), region=(w, h))
 
-        # *Merge both
+        # *Merge all
         img_buff_red = cl.image_from_array(GPUSetup.context, img_mask_red, 4)
         img_buff_black = cl.image_from_array(GPUSetup.context, img_mask_black, 4)
         GPUSetup.program.merge_bin(GPUSetup.queue, (w, h), None, img_buff_red, img_buff_black, dest_buf)
+        img_merge = np.empty_like(cont_img_hsv)
+        cl.enqueue_copy(GPUSetup.queue, img_merge, dest_buf, origin=(0, 0), region=(w, h))
+
+        img_buff_blue = cl.image_from_array(GPUSetup.context, img_mask_blue, 4)
+        img_buff = cl.image_from_array(GPUSetup.context, img_merge, 4)
+        GPUSetup.program.merge_bin(GPUSetup.queue, (w, h), None, img_buff_blue, img_buff, dest_buf)
         img_merge = np.empty_like(cont_img_hsv)
         cl.enqueue_copy(GPUSetup.queue, img_merge, dest_buf, origin=(0, 0), region=(w, h))
 
@@ -93,7 +110,7 @@ class TrafficSignRecognition():
         # blur = cv2.GaussianBlur(img_gray,(5,5),0)
         # _, img_otsu = cv2.threshold(img_gray,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
 
-        # cv2.imshow('Original and HSV', img_concate_Verti)
+        # # cv2.imshow('Original and HSV', img_concate_Verti)
         # cv2.imshow('Gray', img_gray)
         # cv2.imshow("Otsu by cv", img_otsu)
         # cv2.imshow("Hsv", img_hsv)
@@ -228,7 +245,7 @@ class TrafficSignRecognition():
         self.templateSumSquare()
         return self.frame[:, :, :3], self.marked_fame
 
-    def templateSumSquare(self, error_limit=10000, old_sign_err_mult=0.9, old_sign_pix_diff=20):
+    def templateSumSquare(self, error_limit=15000, old_sign_err_mult=0.9, old_sign_pix_diff=20):
         start_time = time.time()
         for sign in self.signs:
             # *Load sign + masking and binaryzation
