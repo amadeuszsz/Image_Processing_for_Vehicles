@@ -52,8 +52,8 @@ def recognize_sign(path=None):
     cv2.destroyAllWindows()
 
 def main():
-    #recognize_sign(sys.argv[1])
-    recognize_sign()
+    recognize_sign(sys.argv[1])
+    # recognize_sign()
 
 if __name__ == "__main__":
     main()
