@@ -110,7 +110,7 @@ class TrafficSignRecognition():
         # blur = cv2.GaussianBlur(img_gray,(5,5),0)
         # _, img_otsu = cv2.threshold(img_gray,0,255,cv2.THRESH_BINARY| cv2.THRESH_OTSU)
 
-        # # cv2.imshow('Original and HSV', img_concate_Verti)
+        # cv2.imshow('Original and HSV', img_concate_Verti)
         # cv2.imshow('Gray', img_gray)
         # cv2.imshow("Otsu by cv", img_otsu)
         # cv2.imshow("Hsv", img_hsv)
