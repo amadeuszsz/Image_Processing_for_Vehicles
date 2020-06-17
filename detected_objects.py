@@ -2,7 +2,7 @@ import numpy as np
 from sign import Sign
 
 class DetectedObjects():
-    def __init__(self, labels, coords, width, height, min_obj_size=100):
+    def __init__(self, labels, coords, width, height, min_obj_size=400):
         self.labels = labels
         self.coords = coords
         self.width = width
