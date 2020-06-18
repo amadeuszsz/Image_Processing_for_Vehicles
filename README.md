@@ -1,2 +1,2 @@
-# Image_Processing_for_Vehicles
-Some image processing algorithms used in vehicles.
+# Traffic Sign Recognition
+To run type "python3 main.py path_to_video".
