@@ -1,7 +1,7 @@
 # Traffic Sign Recognition
 
 The application allows for detection and recognition of traffic signs from a video signal. The project was
-created using the Python programming language and the OpenCl framework, which provides the ability
+created using the Python programming language and the OpenCL framework, which provides the ability
 to use the graphics card during image processing. For character detection, HSV was used to extract
 interesting image properties and then the Connected Components algorithm detects single objects. Af-
 ter that, using the predefined templates database, the application compares the detected objects with
